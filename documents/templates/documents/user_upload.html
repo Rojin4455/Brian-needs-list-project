@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Documents</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f0f9f4 0%, #e8f5e9 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #4caf50 0%, #66bb6a 50%, #4caf50 100%);
+        }
+
+        .header {
+            padding: 30px;
+            border-bottom: 1px solid #e8f5e9;
+            background: linear-gradient(135deg, #ffffff 0%, #f1f8f4 100%);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #2e7d32;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .header .request-id {
+            font-size: 12px;
+            color: #999;
+            margin-top: 8px;
+            font-family: monospace;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2e7d32;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e8f5e9;
+        }
+
+        .section-subtitle {
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            margin-top: 24px;
+            margin-bottom: 16px;
+        }
+
+        .document-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #fafafa;
+        }
+
+        .document-header {
+            margin-bottom: 16px;
+        }
+
+        .document-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .document-description {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .upload-area {
+            border: 2px dashed #4caf50;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 16px;
+        }
+
+        .upload-area:hover {
+            border-color: #2e7d32;
+            background: #f1f8f4;
+        }
+
+        .upload-area.dragover {
+            border-color: #2e7d32;
+            background: #e8f5e9;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #4caf50;
+            margin-bottom: 12px;
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .upload-hint {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .uploaded-files {
+            margin-top: 16px;
+        }
+
+        .uploaded-file {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .file-icon {
+            font-size: 24px;
+            color: #4caf50;
+        }
+
+        .file-details {
+            flex: 1;
+        }
+
+        .file-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .file-date {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-view {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .btn-view:hover {
+            background: #c8e6c9;
+        }
+
+        .btn-delete {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .btn-delete:hover {
+            background: #ffcdd2;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #4caf50;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Upload Documents</h1>
+            <div class="subtitle">Please upload the required documents</div>
+            <div class="request-id">Request ID: {{ request_id }}</div>
+        </div>
+
+        <div class="content">
+            <div id="alert-container"></div>
+
+            {% if adhoc_documents %}
+            <div class="section">
+                <div class="section-title">AD HOC Documents</div>
+                {% for doc in adhoc_documents %}
+                <div class="document-card" data-selection-id="{{ doc.selection_id }}">
+                    <div class="document-header">
+                        <div class="document-name">{{ doc.document_name }}</div>
+                        <div class="document-description">{{ doc.document_description }}</div>
+                    </div>
+                    <div class="upload-area" onclick="document.getElementById('file-{{ doc.selection_id }}').click()">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-hint">PDF, DOC, DOCX, JPG, PNG (Max 10MB)</div>
+                    </div>
+                    <input type="file" id="file-{{ doc.selection_id }}" class="file-input" 
+                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" 
+                           onchange="uploadFile({{ doc.selection_id }}, this.files[0])">
+                    <div class="uploaded-files" id="uploads-{{ doc.selection_id }}">
+                        {% for upload in doc.uploads %}
+                        <div class="uploaded-file" data-upload-id="{{ upload.id }}">
+                            <div class="file-info">
+                                <div class="file-icon">📎</div>
+                                <div class="file-details">
+                                    <div class="file-name">{{ upload.file_name }}</div>
+                                    <div class="file-date">Uploaded: {{ upload.uploaded_at|date:"M d, Y H:i" }}</div>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <a href="{{ upload.file_url }}" target="_blank" class="btn btn-view">View</a>
+                                <button class="btn btn-delete" onclick="deleteUpload({{ upload.id }}, {{ doc.selection_id }})">Delete</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if individual_documents %}
+            <div class="section">
+                <div class="section-title">Individual Documents</div>
+                {% for doc in individual_documents %}
+                <div class="document-card" data-selection-id="{{ doc.selection_id }}">
+                    <div class="document-header">
+                        <div class="document-name">{{ doc.document_name }}</div>
+                        <div class="document-description">{{ doc.document_description }}</div>
+                    </div>
+                    <div class="upload-area" onclick="document.getElementById('file-{{ doc.selection_id }}').click()">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-hint">PDF, DOC, DOCX, JPG, PNG (Max 10MB)</div>
+                    </div>
+                    <input type="file" id="file-{{ doc.selection_id }}" class="file-input" 
+                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" 
+                           onchange="uploadFile({{ doc.selection_id }}, this.files[0])">
+                    <div class="uploaded-files" id="uploads-{{ doc.selection_id }}">
+                        {% for upload in doc.uploads %}
+                        <div class="uploaded-file" data-upload-id="{{ upload.id }}">
+                            <div class="file-info">
+                                <div class="file-icon">📎</div>
+                                <div class="file-details">
+                                    <div class="file-name">{{ upload.file_name }}</div>
+                                    <div class="file-date">Uploaded: {{ upload.uploaded_at|date:"M d, Y H:i" }}</div>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <a href="{{ upload.file_url }}" target="_blank" class="btn btn-view">View</a>
+                                <button class="btn btn-delete" onclick="deleteUpload({{ upload.id }}, {{ doc.selection_id }})">Delete</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if needs_list_documents %}
+            <div class="section">
+                <div class="section-title">Needs List Documents</div>
+                {% for print_group_name, documents in needs_list_documents.items %}
+                <div class="section-subtitle">{{ print_group_name }}</div>
+                {% for doc in documents %}
+                <div class="document-card" data-selection-id="{{ doc.selection_id }}">
+                    <div class="document-header">
+                        <div class="document-name">{{ doc.document_name }}</div>
+                        <div class="document-description">{{ doc.document_description }}</div>
+                    </div>
+                    <div class="upload-area" onclick="document.getElementById('file-{{ doc.selection_id }}').click()">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-hint">PDF, DOC, DOCX, JPG, PNG (Max 10MB)</div>
+                    </div>
+                    <input type="file" id="file-{{ doc.selection_id }}" class="file-input" 
+                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" 
+                           onchange="uploadFile({{ doc.selection_id }}, this.files[0])">
+                    <div class="uploaded-files" id="uploads-{{ doc.selection_id }}">
+                        {% for upload in doc.uploads %}
+                        <div class="uploaded-file" data-upload-id="{{ upload.id }}">
+                            <div class="file-info">
+                                <div class="file-icon">📎</div>
+                                <div class="file-details">
+                                    <div class="file-name">{{ upload.file_name }}</div>
+                                    <div class="file-date">Uploaded: {{ upload.uploaded_at|date:"M d, Y H:i" }}</div>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <a href="{{ upload.file_url }}" target="_blank" class="btn btn-view">View</a>
+                                <button class="btn btn-delete" onclick="deleteUpload({{ upload.id }}, {{ doc.selection_id }})">Delete</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if not adhoc_documents and not individual_documents and not needs_list_documents %}
+            <div class="empty-state">
+                No documents have been selected by the admin yet. Please wait for the admin to select documents.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        const requestId = '{{ request_id }}';
+
+        function showAlert(message, type = 'success') {
+            const container = document.getElementById('alert-container');
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        async function uploadFile(selectionId, file) {
+            if (!file) return;
+
+            // Validate file size (10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                showAlert('File size exceeds 10MB limit', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const uploadsContainer = document.getElementById(`uploads-${selectionId}`);
+            const loadingHtml = '<div class="loading">Uploading...</div>';
+            uploadsContainer.insertAdjacentHTML('beforeend', loadingHtml);
+
+            try {
+                const response = await fetch(`/api/${requestId}/upload/${selectionId}/`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Remove loading indicator
+                    uploadsContainer.querySelector('.loading')?.remove();
+
+                    // Add uploaded file to the list
+                    const uploadedAt = new Date(result.uploaded_at).toLocaleString();
+                    const fileHtml = `
+                        <div class="uploaded-file" data-upload-id="${result.upload_id}">
+                            <div class="file-info">
+                                <div class="file-icon">📎</div>
+                                <div class="file-details">
+                                    <div class="file-name">${result.file_name}</div>
+                                    <div class="file-date">Uploaded: ${uploadedAt}</div>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <a href="${result.file_url}" target="_blank" class="btn btn-view">View</a>
+                                <button class="btn btn-delete" onclick="deleteUpload(${result.upload_id}, ${selectionId})">Delete</button>
+                            </div>
+                        </div>
+                    `;
+                    uploadsContainer.insertAdjacentHTML('beforeend', fileHtml);
+                    showAlert('File uploaded successfully!', 'success');
+                } else {
+                    uploadsContainer.querySelector('.loading')?.remove();
+                    showAlert(result.error || 'Error uploading file', 'error');
+                }
+            } catch (error) {
+                uploadsContainer.querySelector('.loading')?.remove();
+                showAlert('Error uploading file', 'error');
+                console.error('Error:', error);
+            }
+
+            // Reset file input
+            document.getElementById(`file-${selectionId}`).value = '';
+        }
+
+        async function deleteUpload(uploadId, selectionId) {
+            if (!confirm('Are you sure you want to delete this file?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/${requestId}/upload/${uploadId}/delete/`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Remove the file element
+                    const fileElement = document.querySelector(`[data-upload-id="${uploadId}"]`);
+                    if (fileElement) {
+                        fileElement.remove();
+                    }
+                    showAlert('File deleted successfully!', 'success');
+                } else {
+                    showAlert(result.error || 'Error deleting file', 'error');
+                }
+            } catch (error) {
+                showAlert('Error deleting file', 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        // Add drag and drop functionality
+        document.querySelectorAll('.upload-area').forEach(area => {
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.classList.add('dragover');
+            });
+
+            area.addEventListener('dragleave', () => {
+                area.classList.remove('dragover');
+            });
+
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const selectionId = area.closest('.document-card').dataset.selectionId;
+                    uploadFile(parseInt(selectionId), files[0]);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
