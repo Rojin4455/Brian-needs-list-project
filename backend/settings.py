@@ -27,7 +27,7 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = True
 
 # Also ensure your IP is in ALLOWED_HOSTS
-ALLOWED_HOSTS = ['3.106.189.174', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['3.106.189.174', 'localhost', '127.0.0.1','docs.bestrentalpropertyloansusa.com']
 
 # Application definition
 
