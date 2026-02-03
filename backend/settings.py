@@ -50,10 +50,16 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # XFrameOptionsMiddleware removed: we use CSP_FRAME_ANCESTORS for iframe embedding (e.g. GHL).
+    # Adding it back with X_FRAME_OPTIONS = "DENY" would block embedding.
 ]
 
-CSP_FRAME_ANCESTORS = ("*",)
+# django-csp 4.x format (see https://django-csp.readthedocs.io/en/latest/migration-guide.html)
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "frame-ancestors": ("*",),
+    }
+}
 
 
 ROOT_URLCONF = 'backend.urls'
@@ -146,6 +152,3 @@ GHL_ACCESS_TOKEN = config('GHL_ACCESS_TOKEN', default='')
 GHL_PARENT_ID = config('GHL_PARENT_ID', default='')  # parentId for upload-file
 GHL_ALT_TYPE = config('GHL_ALT_TYPE', default='location')  # for update/delete (e.g. location)
 GHL_ALT_ID = config('GHL_ALT_ID', default='')  # for update/delete (e.g. location/company id)
-
-
-X_FRAME_OPTIONS = None
