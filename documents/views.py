@@ -169,11 +169,12 @@ def admin_user_uploads_view(request, request_id):
     """
     Admin view page to see all user uploads and accept/reject them.
     URL: {request_id}/request/admin/uploads/
+    If no document list exists yet, shows a friendly "create the list first" page instead of 404.
     """
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
     except DocumentRequest.DoesNotExist:
-        raise Http404("Request not found")
+        return render(request, 'documents/request_not_found.html', {'request_id': request_id})
     adhoc_docs, individual_docs, needs_list_docs = _build_request_document_data(doc_request)
     context = {
         'request_id': request_id,
@@ -528,11 +529,12 @@ def user_upload_page(request, request_id):
     """
     User upload page for a specific request ID.
     URL: {request_id}/upload/
+    If no document list exists yet, shows a friendly "create the list first" page instead of 404.
     """
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
     except DocumentRequest.DoesNotExist:
-        raise Http404("Request not found")
+        return render(request, 'documents/request_not_found.html', {'request_id': request_id, 'is_user_facing': True})
     adhoc_docs, individual_docs, needs_list_docs = _build_request_document_data(doc_request)
     context = {
         'request_id': request_id,
@@ -1039,19 +1041,17 @@ def user_documents_view(request, request_id):
     """
     User view page to see all their uploaded documents and their status.
     URL: {request_id}/view/
+    If no document list exists yet, shows a friendly "create the list first" page instead of 404.
     """
-    # Get the document request
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
     except DocumentRequest.DoesNotExist:
-        raise Http404("Request not found")
+        return render(request, 'documents/request_not_found.html', {'request_id': request_id, 'is_user_facing': True})
     
-    # Get all admin selections grouped by section type
     selections = AdminDocumentSelection.objects.filter(
         request=doc_request
     ).select_related('document', 'print_group').prefetch_related('user_uploads')
     
-    # Group selections by section type
     adhoc_docs = []
     individual_docs = []
     needs_list_docs = {}
