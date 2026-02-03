@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from decouple import config
+from csp.constants import SELF, UNSAFE_INLINE
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,9 +56,13 @@ MIDDLEWARE = [
 ]
 
 # django-csp 4.x format (see https://django-csp.readthedocs.io/en/latest/migration-guide.html)
+# Allow inline styles/scripts and external logo so admin homepage and iframe embedding work
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "frame-ancestors": ("*",),
+        "img-src": [SELF, "https://storage.googleapis.com"],
+        "style-src": [SELF, UNSAFE_INLINE],
+        "script-src": [SELF, UNSAFE_INLINE],
     }
 }
 
