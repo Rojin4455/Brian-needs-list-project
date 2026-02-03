@@ -234,6 +234,97 @@
         
         <div class="modal-body">
             <div id="alert-container"></div>
+            
+            <!-- Create Custom Print Group Form -->
+            <div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                <h3 style="font-size: 16px; font-weight: 600; color: #2e7d32; margin-bottom: 16px;">Create Custom Print Group</h3>
+                <form id="custom-print-group-form">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div>
+                            <label for="custom-print-group-name" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Print Group Name <span style="color: #e74c3c;">*</span></label>
+                            <input type="text" id="custom-print-group-name" name="name" required placeholder="Enter print group name" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        <div>
+                            <label for="custom-print-group-description" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Description</label>
+                            <input type="text" id="custom-print-group-description" name="description" placeholder="Optional description" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                    </div>
+                    <button type="submit" style="background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%); color: white; padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Create Print Group</button>
+                </form>
+            </div>
+
+            <!-- Create Custom Category Form -->
+            <div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: #2e7d32; margin: 0;">Create Custom Category</h3>
+                    <button type="button" id="toggle-category-form-needs" style="background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">+ Add Category</button>
+                </div>
+                <form id="custom-category-form-needs" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <label for="custom-category-name-needs" style="display: block; margin-bottom: 6px; color: #333; font-weight: 500; font-size: 13px;">Category Name <span style="color: #e74c3c;">*</span></label>
+                            <input type="text" id="custom-category-name-needs" name="name" required placeholder="Enter category name" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+                        </div>
+                        <div>
+                            <label for="custom-category-description-needs" style="display: block; margin-bottom: 6px; color: #333; font-weight: 500; font-size: 13px;">Description</label>
+                            <input type="text" id="custom-category-description-needs" name="description" placeholder="Optional description" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" style="background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%); color: white; padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;">Create Category</button>
+                        <button type="button" id="cancel-category-form-needs" style="background: #f5f5f5; color: #333; padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Create Custom Document Form (shown when a print group is selected) -->
+            <div id="custom-document-section" style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 30px; display: none;">
+                <h3 style="font-size: 16px; font-weight: 600; color: #2e7d32; margin-bottom: 16px;">Add Custom Document to Selected Print Group</h3>
+                <form id="custom-document-form">
+                    <input type="hidden" id="custom-document-print-group-id">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div>
+                            <label for="custom-document-category" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Category <span style="color: #e74c3c;">*</span></label>
+                            <select id="custom-document-category" name="category_id" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                                <option value="">Select a category</option>
+                                {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="custom-document-name" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Document Name <span style="color: #e74c3c;">*</span></label>
+                            <input type="text" id="custom-document-name" name="name" required placeholder="Enter document name" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label for="custom-document-description" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Description <span style="color: #e74c3c;">*</span></label>
+                        <textarea id="custom-document-description" name="description" required placeholder="Enter document description" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;"></textarea>
+                    </div>
+                    <button type="submit" style="background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%); color: white; padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Add Custom Document</button>
+                </form>
+            </div>
+
+            {% if custom_print_groups %}
+            <div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                <h3 style="font-size: 16px; font-weight: 600; color: #2e7d32; margin-bottom: 16px;">Existing Custom Print Groups</h3>
+                {% for pg in custom_print_groups %}
+                <div style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+                    <div style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px;">{{ pg.name }}</div>
+                    {% if pg.documents %}
+                    <div style="margin-top: 8px;">
+                        {% for doc in pg.documents %}
+                        <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; margin-bottom: 4px; font-size: 12px;">
+                            <strong>{{ doc.name }}</strong> - {{ doc.description }} <span style="color: #999;">({{ doc.category_name }})</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
             <div class="section">
                 <div class="section-title">Select a Need List</div>
                 <div class="radio-group" id="need-list-options">
@@ -281,7 +372,7 @@
         let selectedPrintGroup = null;
         let documents = [];
         let selectedDocuments = [];
-        const existingSelections = {{ selected_by_print_group|safe }};
+        const existingSelections = JSON.parse('{{ selected_by_print_group|escapejs }}');
 
         async function loadPrintGroups() {
             try {
@@ -320,6 +411,10 @@
 
         async function selectPrintGroup(printGroupId) {
             selectedPrintGroup = printGroupId;
+            // Show custom document form and set print group ID
+            document.getElementById('custom-document-section').style.display = 'block';
+            document.getElementById('custom-document-print-group-id').value = printGroupId;
+            
             try {
                 const response = await fetch(`/api/documents/?print_group_id=${printGroupId}`);
                 const data = await response.json();
@@ -443,6 +538,167 @@
                 console.error('Error:', error);
             }
         }
+
+        // Toggle custom category form
+        document.getElementById('toggle-category-form-needs').addEventListener('click', function() {
+            const form = document.getElementById('custom-category-form-needs');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        });
+
+        document.getElementById('cancel-category-form-needs').addEventListener('click', function() {
+            document.getElementById('custom-category-form-needs').style.display = 'none';
+            document.getElementById('custom-category-form-needs').reset();
+        });
+
+        // Handle custom category form submission
+        document.getElementById('custom-category-form-needs').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('custom-category-name-needs').value.trim(),
+                description: document.getElementById('custom-category-description-needs').value.trim() || ''
+            };
+            
+            if (!formData.name) {
+                showAlert('Please enter a category name', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/categories/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('Custom category created successfully!', 'success');
+                    // Add to category dropdown
+                    const categorySelect = document.getElementById('custom-document-category');
+                    const option = document.createElement('option');
+                    option.value = result.category.id;
+                    option.textContent = result.category.name;
+                    categorySelect.appendChild(option);
+                    // Select the newly created category
+                    categorySelect.value = result.category.id;
+                    // Hide and reset form
+                    document.getElementById('custom-category-form-needs').style.display = 'none';
+                    document.getElementById('custom-category-form-needs').reset();
+                } else {
+                    showAlert(result.error || 'Error creating category', 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating category', 'error');
+                console.error('Error:', error);
+            }
+        });
+
+        // Handle custom print group form submission
+        document.getElementById('custom-print-group-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('custom-print-group-name').value.trim(),
+                description: document.getElementById('custom-print-group-description').value.trim() || ''
+            };
+            
+            if (!formData.name) {
+                showAlert('Please enter a print group name', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/${requestId}/admin/needs-list/print-group/create/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('Custom print group created successfully!', 'success');
+                    // Add to print groups and reload
+                    printGroups.push(result.print_group);
+                    renderPrintGroups();
+                    // Select the newly created print group
+                    document.getElementById(`pg-${result.print_group.id}`).checked = true;
+                    selectPrintGroup(result.print_group.id);
+                    // Reset form
+                    document.getElementById('custom-print-group-form').reset();
+                } else {
+                    showAlert(result.error || 'Error creating print group', 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating print group', 'error');
+                console.error('Error:', error);
+            }
+        });
+
+        // Handle custom document form submission
+        document.getElementById('custom-document-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const printGroupId = document.getElementById('custom-document-print-group-id').value;
+            if (!printGroupId) {
+                showAlert('Please select a print group first', 'error');
+                return;
+            }
+            
+            const formData = {
+                name: document.getElementById('custom-document-name').value.trim(),
+                description: document.getElementById('custom-document-description').value.trim(),
+                category_id: parseInt(document.getElementById('custom-document-category').value),
+                print_group_id: parseInt(printGroupId)
+            };
+            
+            if (!formData.name || !formData.description || !formData.category_id || !formData.print_group_id) {
+                showAlert('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/${requestId}/admin/needs-list/document/create/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('Custom document created successfully!', 'success');
+                    // Add to documents and selected documents, then reload
+                    const newDoc = {
+                        id: result.document.id,
+                        name: result.document.name,
+                        description: result.document.description,
+                        category: {
+                            id: result.document.category.id,
+                            name: result.document.category.name
+                        }
+                    };
+                    documents.push(newDoc);
+                    selectedDocuments.push(newDoc.id);
+                    renderDocuments();
+                    // Reset form
+                    document.getElementById('custom-document-form').reset();
+                } else {
+                    showAlert(result.error || 'Error creating custom document', 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating custom document', 'error');
+                console.error('Error:', error);
+            }
+        });
 
         // Load print groups on page load
         loadPrintGroups();

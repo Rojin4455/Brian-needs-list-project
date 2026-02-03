@@ -74,6 +74,16 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# if DEBUG:
+#     # Use SQLite for local development
+#     DATABASES = {
+#         'default': {
+#             'ENGINE': 'django.db.backends.sqlite3',
+#             'NAME': BASE_DIR / 'db.sqlite3',
+#         }
+#     }
+# else:
+#     # Use PostgreSQL for production
 DATABASES = {
     'default': {
         'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
@@ -125,4 +135,10 @@ STATIC_ROOT = BASE_DIR / 'static'  # Add this line
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# GoHighLevel (GHL) Media API - upload files to GHL instead of server
+GHL_ACCESS_TOKEN = config('GHL_ACCESS_TOKEN', default='')
+GHL_PARENT_ID = config('GHL_PARENT_ID', default='')  # parentId for upload-file
+GHL_ALT_TYPE = config('GHL_ALT_TYPE', default='location')  # for update/delete (e.g. location)
+GHL_ALT_ID = config('GHL_ALT_ID', default='')  # for update/delete (e.g. location/company id)
 

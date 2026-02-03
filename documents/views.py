@@ -1,9 +1,16 @@
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 import json
+from io import BytesIO
+import html
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib import colors
 from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload
 
 
@@ -25,6 +32,47 @@ def get_categories(request):
         for category in categories
     ]
     return JsonResponse({'categories': data}, safe=False)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_category(request):
+    """
+    API endpoint to create a new category
+    POST /api/categories/create/
+    Body: JSON with name and description (optional)
+    """
+    try:
+        data = json.loads(request.body)
+        name = data.get('name')
+        description = data.get('description', '')
+        
+        if not name:
+            return JsonResponse({'error': 'Missing required field: name'}, status=400)
+        
+        # Check if category already exists
+        if Category.objects.filter(name=name).exists():
+            return JsonResponse({'error': 'Category with this name already exists'}, status=400)
+        
+        # Create the category
+        category = Category.objects.create(
+            name=name,
+            description=description or f'Category: {name}'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'category': {
+                'id': category.id,
+                'name': category.name,
+                'description': category.description,
+            }
+        }, status=201)
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @require_http_methods(["GET"])
@@ -117,6 +165,138 @@ def homepage(request, request_id):
     return render(request, 'documents/homepage.html', context)
 
 
+def admin_user_uploads_view(request, request_id):
+    """
+    Admin view page to see all user uploads and accept/reject them.
+    URL: {request_id}/request/admin/uploads/
+    """
+    try:
+        doc_request = DocumentRequest.objects.get(request_id=request_id)
+    except DocumentRequest.DoesNotExist:
+        raise Http404("Request not found")
+    adhoc_docs, individual_docs, needs_list_docs = _build_request_document_data(doc_request)
+    context = {
+        'request_id': request_id,
+        'adhoc_documents': adhoc_docs,
+        'individual_documents': individual_docs,
+        'needs_list_documents': needs_list_docs,
+    }
+    return render(request, 'documents/admin_user_uploads.html', context)
+
+
+def _build_request_document_data(doc_request):
+    """Build adhoc_docs, individual_docs, needs_list_docs for a document request (shared for PDF and pages)."""
+    selections = AdminDocumentSelection.objects.filter(
+        request=doc_request
+    ).select_related('document', 'print_group').prefetch_related('user_uploads')
+
+    adhoc_docs = []
+    individual_docs = []
+    needs_list_docs = {}
+
+    for selection in selections:
+        doc_data = {
+            'selection_id': selection.id,
+            'document_id': selection.document.id,
+            'document_name': selection.document.name,
+            'document_description': selection.document.description,
+            'uploads': [
+                {
+                    'id': upload.id,
+                    'file_url': upload.get_file_url(),
+                    'file_name': upload.get_file_name(),
+                    'uploaded_at': upload.uploaded_at,
+                    'accepted': upload.accepted,
+                    'accepted_at': upload.accepted_at,
+                }
+                for upload in selection.user_uploads.all()
+            ]
+        }
+        if selection.section_type == 'adhoc':
+            adhoc_docs.append(doc_data)
+        elif selection.section_type == 'individual':
+            individual_docs.append(doc_data)
+        elif selection.section_type == 'needs_list':
+            print_group_name = selection.print_group.name if selection.print_group else 'Unknown'
+            if print_group_name not in needs_list_docs:
+                needs_list_docs[print_group_name] = []
+            needs_list_docs[print_group_name].append(doc_data)
+
+    return adhoc_docs, individual_docs, needs_list_docs
+
+
+@require_http_methods(["GET"])
+def download_request_pdf(request, request_id):
+    """
+    Download a PDF of the document request list: admin-requested documents with descriptions,
+    and for each document any user uploads (file name + View link).
+    URL: {request_id}/download-pdf/
+    """
+    try:
+        doc_request = DocumentRequest.objects.get(request_id=request_id)
+    except DocumentRequest.DoesNotExist:
+        raise Http404("Request not found")
+
+    adhoc_docs, individual_docs, needs_list_docs = _build_request_document_data(doc_request)
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=inch, leftMargin=inch, topMargin=inch, bottomMargin=inch
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle', parent=styles['Heading1'], fontSize=16, spaceAfter=12
+    )
+    heading_style = ParagraphStyle(
+        'SectionHeading', parent=styles['Heading2'], fontSize=12, spaceAfter=8, spaceBefore=12
+    )
+    body_style = styles['Normal']
+    small_style = ParagraphStyle(
+        'Small', parent=styles['Normal'], fontSize=9, spaceAfter=4, leftIndent=12
+    )
+    link_style = ParagraphStyle(
+        'Link', parent=styles['Normal'], fontSize=9, spaceAfter=4, leftIndent=24, textColor=colors.HexColor('#1565c0')
+    )
+
+    story = []
+    story.append(Paragraph(f"Document Request – {html.escape(request_id)}", title_style))
+    story.append(Spacer(1, 0.2 * inch))
+
+    def add_doc_list(docs, section_title):
+        if not docs:
+            return
+        story.append(Paragraph(html.escape(section_title), heading_style))
+        for d in docs:
+            doc_name = html.escape(d['document_name'] or 'Document')
+            story.append(Paragraph(f"<b>{doc_name}</b>", body_style))
+            desc = d.get('document_description') or ''
+            desc_short = desc[:500] + ("..." if len(desc) > 500 else "")
+            story.append(Paragraph(html.escape(desc_short), small_style))
+            if d['uploads']:
+                for u in d['uploads']:
+                    name = html.escape(u.get('file_name') or 'Uploaded file')
+                    story.append(Paragraph(f"• {name}", small_style))
+                    url = u.get('file_url')
+                    if url:
+                        story.append(Paragraph(f'View: <a href="{html.escape(url)}">{html.escape(url)}</a>', link_style))
+            else:
+                story.append(Paragraph("No uploads yet", small_style))
+            story.append(Spacer(1, 0.1 * inch))
+        story.append(Spacer(1, 0.15 * inch))
+
+    add_doc_list(adhoc_docs, "AD HOC Documents")
+    add_doc_list(individual_docs, "Individual Documents")
+    for pg_name, docs in sorted(needs_list_docs.items()):
+        add_doc_list(docs, f"Needs List – {pg_name}")
+
+    doc.build(story)
+    buffer.seek(0)
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="document-request-{request_id}.pdf"'
+    return response
+
+
 def adhoc_page(request, request_id):
     """
     AD HOC - Request a custom document page
@@ -167,10 +347,25 @@ def individual_documents_page(request, request_id):
     
     selected_document_ids = [sel.document.id for sel in existing_selections]
     
+    # Get all categories for custom document creation
+    categories = Category.objects.all()
+    
     import json as json_module
     context = {
         'request_id': request_id,
         'selected_document_ids': json_module.dumps(selected_document_ids),
+        'categories': categories,
+        'existing_custom_documents': [
+            {
+                'id': sel.id,
+                'document_id': sel.document.id,
+                'name': sel.document.name,
+                'description': sel.document.description,
+                'category_id': sel.document.category.id,
+                'category_name': sel.document.category.name,
+            }
+            for sel in existing_selections
+        ],
     }
     return render(request, 'documents/individual_documents.html', context)
 
@@ -186,21 +381,51 @@ def needs_list_page(request, request_id):
     existing_selections = AdminDocumentSelection.objects.filter(
         request=doc_request,
         section_type='needs_list'
-    ).select_related('document', 'print_group')
+    ).select_related('document', 'print_group', 'document__category')
     
     # Group by print group
     selected_by_print_group = {}
+    custom_print_groups = []
     for sel in existing_selections:
         pg_id = sel.print_group.id if sel.print_group else None
         pg_key = str(pg_id) if pg_id else 'null'
         if pg_key not in selected_by_print_group:
             selected_by_print_group[pg_key] = []
         selected_by_print_group[pg_key].append(sel.document.id)
+        
+        # Collect custom print groups and their documents
+        if sel.print_group:
+            pg_exists = any(pg['id'] == sel.print_group.id for pg in custom_print_groups)
+            if not pg_exists:
+                custom_print_groups.append({
+                    'id': sel.print_group.id,
+                    'name': sel.print_group.name,
+                    'documents': []
+                })
+            # Add document to the print group
+            for pg in custom_print_groups:
+                if pg['id'] == sel.print_group.id:
+                    pg['documents'].append({
+                        'selection_id': sel.id,
+                        'document_id': sel.document.id,
+                        'name': sel.document.name,
+                        'description': sel.document.description,
+                        'category_id': sel.document.category.id,
+                        'category_name': sel.document.category.name,
+                    })
+                    break
+    
+    # Get all categories and print groups for custom creation
+    categories = Category.objects.all()
+    all_print_groups = PrintGroup.objects.all()
     
     import json as json_module
     context = {
         'request_id': request_id,
         'selected_by_print_group': json_module.dumps(selected_by_print_group),
+        'categories': categories,
+        'print_groups': all_print_groups,
+        'custom_print_groups': custom_print_groups,
     }
     return render(request, 'documents/needs_list.html', context)
 
@@ -304,49 +529,11 @@ def user_upload_page(request, request_id):
     User upload page for a specific request ID.
     URL: {request_id}/upload/
     """
-    # Get the document request
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
     except DocumentRequest.DoesNotExist:
         raise Http404("Request not found")
-    
-    # Get all admin selections grouped by section type
-    selections = AdminDocumentSelection.objects.filter(
-        request=doc_request
-    ).select_related('document', 'print_group').prefetch_related('user_uploads')
-    
-    # Group selections by section type
-    adhoc_docs = []
-    individual_docs = []
-    needs_list_docs = {}
-    
-    for selection in selections:
-        doc_data = {
-            'selection_id': selection.id,
-            'document_id': selection.document.id,
-            'document_name': selection.document.name,
-            'document_description': selection.document.description,
-            'uploads': [
-                {
-                    'id': upload.id,
-                    'file_url': upload.file.url,
-                    'file_name': upload.file.name.split('/')[-1],
-                    'uploaded_at': upload.uploaded_at,
-                }
-                for upload in selection.user_uploads.all()
-            ]
-        }
-        
-        if selection.section_type == 'adhoc':
-            adhoc_docs.append(doc_data)
-        elif selection.section_type == 'individual':
-            individual_docs.append(doc_data)
-        elif selection.section_type == 'needs_list':
-            print_group_name = selection.print_group.name if selection.print_group else 'Unknown'
-            if print_group_name not in needs_list_docs:
-                needs_list_docs[print_group_name] = []
-            needs_list_docs[print_group_name].append(doc_data)
-    
+    adhoc_docs, individual_docs, needs_list_docs = _build_request_document_data(doc_request)
     context = {
         'request_id': request_id,
         'adhoc_documents': adhoc_docs,
@@ -405,6 +592,178 @@ def create_adhoc_document(request, request_id):
                 'category': {
                     'id': document.category.id,
                     'name': document.category.name,
+                }
+            }
+        }, status=201)
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_individual_document(request, request_id):
+    """
+    API endpoint to create a custom Individual document.
+    POST /api/{request_id}/admin/individual/create/
+    Body: JSON with name, description, category_id
+    """
+    try:
+        # Get or create the document request
+        doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+        
+        data = json.loads(request.body)
+        name = data.get('name')
+        description = data.get('description')
+        category_id = data.get('category_id')
+        
+        if not name or not description or not category_id:
+            return JsonResponse({'error': 'Missing required fields: name, description, category_id'}, status=400)
+        
+        try:
+            category = Category.objects.get(id=category_id)
+        except Category.DoesNotExist:
+            return JsonResponse({'error': 'Category not found'}, status=404)
+        
+        # Create the document
+        document = Document.objects.create(
+            name=name,
+            description=description,
+            category=category
+        )
+        
+        # Create admin selection for this individual document
+        selection = AdminDocumentSelection.objects.create(
+            request=doc_request,
+            section_type='individual',
+            document=document
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'selection_id': selection.id,
+            'document': {
+                'id': document.id,
+                'name': document.name,
+                'description': document.description,
+                'category': {
+                    'id': document.category.id,
+                    'name': document.category.name,
+                }
+            }
+        }, status=201)
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_needs_list_print_group(request, request_id):
+    """
+    API endpoint to create a custom print group (parent) for needs list.
+    POST /api/{request_id}/admin/needs-list/print-group/create/
+    Body: JSON with name, description (optional)
+    """
+    try:
+        # Get or create the document request
+        doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+        
+        data = json.loads(request.body)
+        name = data.get('name')
+        description = data.get('description', '')
+        
+        if not name:
+            return JsonResponse({'error': 'Missing required field: name'}, status=400)
+        
+        # Create the print group
+        print_group = PrintGroup.objects.create(
+            name=name,
+            description=description or f'Print group: {name}'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'print_group': {
+                'id': print_group.id,
+                'name': print_group.name,
+                'description': print_group.description,
+            }
+        }, status=201)
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_needs_list_document(request, request_id):
+    """
+    API endpoint to create a custom document (child) for a print group in needs list.
+    POST /api/{request_id}/admin/needs-list/document/create/
+    Body: JSON with name, description, category_id, print_group_id
+    """
+    try:
+        # Get or create the document request
+        doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+        
+        data = json.loads(request.body)
+        name = data.get('name')
+        description = data.get('description')
+        category_id = data.get('category_id')
+        print_group_id = data.get('print_group_id')
+        
+        if not name or not description or not category_id or not print_group_id:
+            return JsonResponse({'error': 'Missing required fields: name, description, category_id, print_group_id'}, status=400)
+        
+        try:
+            category = Category.objects.get(id=category_id)
+        except Category.DoesNotExist:
+            return JsonResponse({'error': 'Category not found'}, status=404)
+        
+        try:
+            print_group = PrintGroup.objects.get(id=print_group_id)
+        except PrintGroup.DoesNotExist:
+            return JsonResponse({'error': 'Print group not found'}, status=404)
+        
+        # Create the document
+        document = Document.objects.create(
+            name=name,
+            description=description,
+            category=category
+        )
+        
+        # Add document to print group
+        document.print_groups.add(print_group)
+        
+        # Create admin selection for this needs list document
+        selection = AdminDocumentSelection.objects.create(
+            request=doc_request,
+            section_type='needs_list',
+            document=document,
+            print_group=print_group
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'selection_id': selection.id,
+            'document': {
+                'id': document.id,
+                'name': document.name,
+                'description': document.description,
+                'category': {
+                    'id': document.category.id,
+                    'name': document.category.name,
+                },
+                'print_group': {
+                    'id': print_group.id,
+                    'name': print_group.name,
                 }
             }
         }, status=201)
@@ -535,37 +894,48 @@ def upload_user_file(request, request_id, selection_id):
     API endpoint to upload a file for a user document.
     POST /api/{request_id}/upload/{selection_id}/
     Body: multipart/form-data with 'file' field
+    Uploads file to GHL (GoHighLevel) and stores url/fileId in model (no server storage).
     """
     try:
-        # Verify request exists
+        from .ghl_service import upload_file as ghl_upload_file
+
         doc_request = DocumentRequest.objects.get(request_id=request_id)
-        
-        # Get the admin selection
         selection = get_object_or_404(AdminDocumentSelection, id=selection_id, request=doc_request)
-        
+
         if 'file' not in request.FILES:
             return JsonResponse({'error': 'No file provided'}, status=400)
-        
+
         file = request.FILES['file']
-        
-        # Create or update user upload (delete existing if any)
-        # For simplicity, we'll allow multiple uploads per selection
+        name = file.name or selection.document.name or 'document'
+
+        # Upload to GHL; do not save file on server
+        result = ghl_upload_file(file, name=name)
+
         upload = UserDocumentUpload.objects.create(
             admin_selection=selection,
-            file=file
+            file=None,
+            ghl_file_id=result.get('fileId'),
+            ghl_file_url=result.get('url'),
+            file_name=file.name,
         )
-        
+
         return JsonResponse({
             'success': True,
             'upload_id': upload.id,
-            'file_url': upload.file.url,
-            'file_name': upload.file.name.split('/')[-1],
+            'file_url': upload.get_file_url(),
+            'file_name': upload.get_file_name(),
             'uploaded_at': upload.uploaded_at.isoformat(),
         }, status=201)
-    
+
     except DocumentRequest.DoesNotExist:
         return JsonResponse({'error': 'Request not found'}, status=404)
     except Exception as e:
+        try:
+            import requests
+            if isinstance(e, requests.HTTPError) and e.response is not None:
+                return JsonResponse({'error': f'GHL upload failed: {e.response.text[:500]}'}, status=502)
+        except Exception:
+            pass
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -575,6 +945,57 @@ def delete_user_upload(request, request_id, upload_id):
     """
     API endpoint to delete a user upload.
     DELETE /api/{request_id}/upload/{upload_id}/delete/
+    Deletes from GHL if ghl_file_id is set, then removes our record.
+    Prevents deletion if the document has been accepted by admin.
+    """
+    try:
+        from django.conf import settings
+        from .ghl_service import delete_media as ghl_delete_media
+
+        doc_request = DocumentRequest.objects.get(request_id=request_id)
+        upload = get_object_or_404(
+            UserDocumentUpload,
+            id=upload_id,
+            admin_selection__request=doc_request
+        )
+
+        if upload.accepted:
+            return JsonResponse({
+                'error': 'Cannot delete an accepted document',
+                'accepted': True
+            }, status=403)
+
+        if upload.ghl_file_id:
+            alt_type = getattr(settings, 'GHL_ALT_TYPE', 'location')
+            alt_id = getattr(settings, 'GHL_ALT_ID', '') or None
+            if alt_id:
+                try:
+                    ghl_delete_media(upload.ghl_file_id, alt_type=alt_type, alt_id=alt_id)
+                except Exception:
+                    pass  # still delete our record if GHL delete fails
+
+        deleted_id = upload.id
+        upload.delete()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Upload deleted successfully',
+            'upload_id': deleted_id
+        })
+
+    except DocumentRequest.DoesNotExist:
+        return JsonResponse({'error': 'Request not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def accept_user_upload(request, request_id, upload_id):
+    """
+    API endpoint for admin to accept or reject a user upload.
+    POST /api/{request_id}/admin/upload/{upload_id}/accept/
+    Body: JSON with 'accepted' (boolean) field
     """
     try:
         # Verify request exists
@@ -587,16 +1008,87 @@ def delete_user_upload(request, request_id, upload_id):
             admin_selection__request=doc_request
         )
         
-        upload_id = upload.id
-        upload.delete()
+        data = json.loads(request.body)
+        accepted = data.get('accepted', False)
+        
+        from django.utils import timezone
+        upload.accepted = accepted
+        if accepted:
+            upload.accepted_at = timezone.now()
+        else:
+            upload.accepted_at = None
+        upload.save()
         
         return JsonResponse({
             'success': True,
-            'message': 'Upload deleted successfully',
-            'upload_id': upload_id
+            'message': f'Document {"accepted" if accepted else "rejected"} successfully',
+            'upload_id': upload.id,
+            'accepted': upload.accepted,
+            'accepted_at': upload.accepted_at.isoformat() if upload.accepted_at else None
         })
     
     except DocumentRequest.DoesNotExist:
         return JsonResponse({'error': 'Request not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def user_documents_view(request, request_id):
+    """
+    User view page to see all their uploaded documents and their status.
+    URL: {request_id}/view/
+    """
+    # Get the document request
+    try:
+        doc_request = DocumentRequest.objects.get(request_id=request_id)
+    except DocumentRequest.DoesNotExist:
+        raise Http404("Request not found")
+    
+    # Get all admin selections grouped by section type
+    selections = AdminDocumentSelection.objects.filter(
+        request=doc_request
+    ).select_related('document', 'print_group').prefetch_related('user_uploads')
+    
+    # Group selections by section type
+    adhoc_docs = []
+    individual_docs = []
+    needs_list_docs = {}
+    
+    for selection in selections:
+        doc_data = {
+            'selection_id': selection.id,
+            'document_id': selection.document.id,
+            'document_name': selection.document.name,
+            'document_description': selection.document.description,
+            'uploads': [
+                {
+                    'id': upload.id,
+                    'file_url': upload.get_file_url(),
+                    'file_name': upload.get_file_name(),
+                    'uploaded_at': upload.uploaded_at,
+                    'accepted': upload.accepted,
+                    'accepted_at': upload.accepted_at,
+                }
+                for upload in selection.user_uploads.all()
+            ]
+        }
+        
+        if selection.section_type == 'adhoc':
+            adhoc_docs.append(doc_data)
+        elif selection.section_type == 'individual':
+            individual_docs.append(doc_data)
+        elif selection.section_type == 'needs_list':
+            print_group_name = selection.print_group.name if selection.print_group else 'Unknown'
+            if print_group_name not in needs_list_docs:
+                needs_list_docs[print_group_name] = []
+            needs_list_docs[print_group_name].append(doc_data)
+    
+    context = {
+        'request_id': request_id,
+        'adhoc_documents': adhoc_docs,
+        'individual_documents': individual_docs,
+        'needs_list_documents': needs_list_docs,
+    }
+    return render(request, 'documents/user_documents_view.html', context)

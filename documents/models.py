@@ -142,6 +142,8 @@ class AdminDocumentSelection(models.Model):
 class UserDocumentUpload(models.Model):
     """
     Stores user uploads for documents selected by admin.
+    Files are uploaded to GHL (GoHighLevel); we store ghl_file_id and ghl_file_url.
+    Legacy file field is optional for backwards compatibility.
     """
     admin_selection = models.ForeignKey(
         AdminDocumentSelection,
@@ -151,7 +153,36 @@ class UserDocumentUpload(models.Model):
     )
     file = models.FileField(
         upload_to='user_uploads/%Y/%m/%d/',
-        help_text="User uploaded file (image, PDF, document, etc.)"
+        blank=True,
+        null=True,
+        help_text="Legacy: file on server (prefer GHL URL)"
+    )
+    ghl_file_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="GHL media fileId from upload-file API"
+    )
+    ghl_file_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="GHL media URL from upload-file API (use for viewing)"
+    )
+    file_name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Original file name for display"
+    )
+    accepted = models.BooleanField(
+        default=False,
+        help_text="Whether the admin has accepted this document"
+    )
+    accepted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the document was accepted by admin"
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -159,5 +190,22 @@ class UserDocumentUpload(models.Model):
     class Meta:
         ordering = ['-uploaded_at']
 
+    def get_file_url(self):
+        """URL to view the file (GHL or legacy server)."""
+        if self.ghl_file_url:
+            return self.ghl_file_url
+        if self.file:
+            return self.file.url
+        return None
+
+    def get_file_name(self):
+        """Display name for the file."""
+        if self.file_name:
+            return self.file_name
+        if self.file:
+            return self.file.name.split('/')[-1] if self.file.name else None
+        return None
+
     def __str__(self):
-        return f"Upload for {self.admin_selection.document.name} - {self.file.name}"
+        name = self.get_file_name() or "upload"
+        return f"Upload for {self.admin_selection.document.name} - {name}"
