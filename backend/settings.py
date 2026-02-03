@@ -142,3 +142,5 @@ GHL_PARENT_ID = config('GHL_PARENT_ID', default='')  # parentId for upload-file
 GHL_ALT_TYPE = config('GHL_ALT_TYPE', default='location')  # for update/delete (e.g. location)
 GHL_ALT_ID = config('GHL_ALT_ID', default='')  # for update/delete (e.g. location/company id)
 
+
+X_FRAME_OPTIONS = 'SAMEORIGIN'
