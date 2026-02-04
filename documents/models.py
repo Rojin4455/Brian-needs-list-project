@@ -209,3 +209,28 @@ class UserDocumentUpload(models.Model):
     def __str__(self):
         name = self.get_file_name() or "upload"
         return f"Upload for {self.admin_selection.document.name} - {name}"
+
+
+class OpportunityCardSubmission(models.Model):
+    """
+    Stores a client's opportunity card registration form submission.
+    Each unique request_id URL gets one submission (create or update on resubmit).
+    """
+    request_id = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Unique identifier from URL (same pattern as document request)"
+    )
+    form_data = models.JSONField(
+        default=dict,
+        help_text="All form fields as key-value pairs (street, city, purpose, etc.)"
+    )
+    submitted_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        verbose_name = "Opportunity Card Submission"
+        verbose_name_plural = "Opportunity Card Submissions"
+
+    def __str__(self):
+        return f"Opportunity Card: {self.request_id}"

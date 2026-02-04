@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opportunity Card - Registration Form</title>
+    <style>
+        :root {
+            --primary: #1a5f4a;
+            --primary-light: #2e7d32;
+            --accent: #4caf50;
+            --accent-soft: #c8e6c9;
+            --bg-gradient-start: #f0f9f4;
+            --bg-gradient-end: #e8f5e9;
+            --section-border: #e0f2e9;
+            --section-bg: #fafcfb;
+            --text: #1a1a1a;
+            --text-muted: #5a5a5a;
+            --input-border: #c5e1d0;
+            --shadow: 0 4px 20px rgba(26, 95, 74, 0.08);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(160deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            min-height: 100vh;
+            color: var(--text);
+            padding: 32px 20px 48px;
+            line-height: 1.5;
+        }
+
+        .page-container {
+            max-width: 820px;
+            margin: 0 auto;
+        }
+
+        .form-card {
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .form-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+        }
+
+        .form-header {
+            padding: 36px 40px 28px;
+            text-align: center;
+            border-bottom: 1px solid var(--section-border);
+            background: linear-gradient(180deg, #fff 0%, var(--section-bg) 100%);
+        }
+
+        .form-header h1 {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }
+
+        .form-header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .form-body { padding: 32px 40px 40px; }
+
+        .section {
+            margin-bottom: 36px;
+            border: 1px solid var(--section-border);
+            border-radius: var(--radius);
+            background: var(--section-bg);
+            overflow: hidden;
+        }
+
+        .section:last-of-type { margin-bottom: 0; }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 16px 20px;
+            background: linear-gradient(90deg, rgba(76, 175, 80, 0.12) 0%, transparent 100%);
+            border-bottom: 1px solid var(--section-border);
+        }
+
+        .section-fields {
+            padding: 20px 20px 24px;
+            display: grid;
+            gap: 18px;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        @media (max-width: 640px) {
+            .section-fields { grid-template-columns: 1fr; }
+        }
+
+        .field-full { grid-column: 1 / -1; }
+
+        .field-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .field-group label .optional { font-weight: 400; color: var(--text-muted); }
+
+        .field-group input[type="text"],
+        .field-group input[type="number"],
+        .field-group select,
+        .field-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--input-border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: inherit;
+            background: #fff;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .field-group input:focus,
+        .field-group select:focus,
+        .field-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+        }
+
+        .field-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .field-group .hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .radio-group, .radio-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .radio-option input { accent-color: var(--primary); }
+
+        .conditional-field {
+            overflow: hidden;
+            transition: opacity 0.25s ease, max-height 0.3s ease;
+        }
+
+        .conditional-field.hidden {
+            opacity: 0;
+            max-height: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+            visibility: hidden;
+        }
+
+        .submit-row {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--section-border);
+            text-align: center;
+        }
+
+        .btn-submit {
+            padding: 14px 40px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(26, 95, 74, 0.35);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(26, 95, 74, 0.4);
+        }
+
+        .success-message {
+            margin: 0 40px 20px;
+            padding: 14px 18px;
+            background: #e8f5e9;
+            border: 1px solid var(--accent);
+            border-radius: var(--radius-sm);
+            color: var(--primary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    {% if initial %}
+    {{ initial|json_script:"initial-form-data" }}
+    {% endif %}
+    <div class="page-container">
+        <div class="form-card">
+            <div class="form-header">
+                <h1>Opportunity Card – Registration Form</h1>
+                <p>Complete all sections. Fields marked with conditions will appear based on your selections.</p>
+            </div>
+
+            {% if success %}
+            <div class="success-message" role="alert">{{ message }}</div>
+            {% endif %}
+
+            <form id="opportunity-form" class="form-body" method="post" action="">
+                {% csrf_token %}
+
+                <!-- 1. Subject Property -->
+                <section class="section">
+                    <h2 class="section-title">Subject Property</h2>
+                    <div class="section-fields">
+                        <div class="field-group field-full">
+                            <label for="street">Street</label>
+                            <input type="text" id="street" name="street" placeholder="Street address">
+                        </div>
+                        <div class="field-group">
+                            <label for="city">City</label>
+                            <input type="text" id="city" name="city" placeholder="City">
+                        </div>
+                        <div class="field-group">
+                            <label for="state">State</label>
+                            <select id="state" name="state">
+                                <option value="">Select state</option>
+                                <option value="AK">AK</option>
+                                <option value="AL">AL</option>
+                                <option value="AR">AR</option>
+                                <option value="AZ">AZ</option>
+                                <option value="CA">CA</option>
+                                <option value="CO">CO</option>
+                                <option value="CT">CT</option>
+                                <option value="DE">DE</option>
+                                <option value="FL">FL</option>
+                                <option value="GA">GA</option>
+                                <option value="HI">HI</option>
+                                <option value="IA">IA</option>
+                                <option value="ID">ID</option>
+                                <option value="IL">IL</option>
+                                <option value="IN">IN</option>
+                                <option value="KS">KS</option>
+                                <option value="KY">KY</option>
+                                <option value="LA">LA</option>
+                                <option value="MA">MA</option>
+                                <option value="MD">MD</option>
+                                <option value="ME">ME</option>
+                                <option value="MI">MI</option>
+                                <option value="MN">MN</option>
+                                <option value="MO">MO</option>
+                                <option value="MS">MS</option>
+                                <option value="MT">MT</option>
+                                <option value="NC">NC</option>
+                                <option value="ND">ND</option>
+                                <option value="NE">NE</option>
+                                <option value="NH">NH</option>
+                                <option value="NJ">NJ</option>
+                                <option value="NM">NM</option>
+                                <option value="NV">NV</option>
+                                <option value="NY">NY</option>
+                                <option value="OH">OH</option>
+                                <option value="OK">OK</option>
+                                <option value="OR">OR</option>
+                                <option value="PA">PA</option>
+                                <option value="RI">RI</option>
+                                <option value="SC">SC</option>
+                                <option value="SD">SD</option>
+                                <option value="TN">TN</option>
+                                <option value="TX">TX</option>
+                                <option value="UT">UT</option>
+                                <option value="VA">VA</option>
+                                <option value="VT">VT</option>
+                                <option value="WA">WA</option>
+                                <option value="WI">WI</option>
+                                <option value="WV">WV</option>
+                                <option value="WY">WY</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="zip_code">Zip Code</label>
+                            <input type="text" id="zip_code" name="zip_code" placeholder="5-digit" maxlength="5" pattern="[0-9]{5}">
+                        </div>
+                        <div class="field-group">
+                            <label for="property_type">Property Type</label>
+                            <select id="property_type" name="property_type">
+                                <option value="">Select type</option>
+                                <option value="Condominium">Condominium</option>
+                                <option value="Detached (SFR)">Detached (SFR)</option>
+                                <option value="Detached Condo">Detached Condo</option>
+                                <option value="High Rise Condo">High Rise Condo</option>
+                                <option value="Manufactured Home">Manufactured Home</option>
+                                <option value="PUD Attached">PUD Attached</option>
+                                <option value="PUD Detached">PUD Detached</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="units">Units</label>
+                            <select id="units" name="units">
+                                <option value="">Select</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. Terms and Mortgage -->
+                <section class="section">
+                    <h2 class="section-title">Terms and Mortgage</h2>
+                    <div class="section-fields">
+                        <div class="field-group field-full">
+                            <label for="purpose">Purpose</label>
+                            <select id="purpose" name="purpose">
+                                <option value="">Select purpose</option>
+                                <option value="Purchase">Purchase</option>
+                                <option value="Cash Out Refinance">Cash Out Refinance</option>
+                                <option value="No Cash Out Refinance">No Cash Out Refinance</option>
+                                <option value="Construction">Construction</option>
+                                <option value="Construction Permanent">Construction Permanent</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_amount_existing_liens" data-show-when="purpose" data-show-values="Cash Out Refinance,No Cash Out Refinance">
+                            <label for="amount_existing_liens">Amount Existing Liens</label>
+                            <input type="number" id="amount_existing_liens" name="amount_existing_liens" min="0" max="20000000" step="1" placeholder="Up to $20,000,000" title="Dollar amount, up to $20,000,000. No decimal places.">
+                            <span class="hint">Currency: dollar amount, up to $20,000,000. No decimal places.</span>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_purchase_price" data-show-when="purpose" data-show-values="Purchase,Construction,Construction Permanent">
+                            <label for="purchase_price">Purchase Price</label>
+                            <input type="number" id="purchase_price" name="purchase_price" min="0" max="99999999" step="1" placeholder="Up to $99,999,999">
+                            <span class="hint">Dollar amount, no decimal places.</span>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_cash_out_amount" data-show-when="purpose" data-show-values="Cash Out Refinance">
+                            <label for="cash_out_amount">Cash Out Amount</label>
+                            <input type="number" id="cash_out_amount" name="cash_out_amount" min="0" max="99999999" step="1" placeholder="Up to $99,999,999">
+                            <span class="hint">Dollar amount, no decimal places.</span>
+                        </div>
+                        <div class="field-group field-full">
+                            <label for="occupancy">Occupancy</label>
+                            <select id="occupancy" name="occupancy">
+                                <option value="">Select</option>
+                                <option value="Primary Residence">Primary Residence</option>
+                                <option value="Second Home">Second Home</option>
+                                <option value="Investment">Investment</option>
+                            </select>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_ppp_request" data-show-when="occupancy" data-show-values="Investment">
+                            <label for="ppp_request">PPP Request</label>
+                            <select id="ppp_request" name="ppp_request">
+                                <option value="">Select</option>
+                                <option value="No PPP">No PPP</option>
+                                <option value="1 Yr PPP">1 Yr PPP</option>
+                                <option value="2 Yr PPP">2 Yr PPP</option>
+                                <option value="3 Yr PPP">3 Yr PPP</option>
+                                <option value="4 Yr PPP">4 Yr PPP</option>
+                                <option value="5 Yr PPP">5 Yr PPP</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="appraisal_value">Appraisal Value (Estimated)</label>
+                            <input type="number" id="appraisal_value" name="appraisal_value" min="0" max="99999999" step="1" placeholder="Up to $99,999,999">
+                            <span class="hint">Dollar amount, no decimal places.</span>
+                        </div>
+                        <div class="field-group">
+                            <label for="loan_amount">Loan Amount</label>
+                            <input type="number" id="loan_amount" name="loan_amount" min="0" max="99999999" step="1" placeholder="Up to $99,999,999">
+                            <span class="hint">Dollar amount, no decimal places.</span>
+                        </div>
+                        <div class="field-group">
+                            <label for="credit_score">Credit Score</label>
+                            <input type="number" id="credit_score" name="credit_score" min="300" max="850" placeholder="3-digit">
+                        </div>
+                        <div class="field-group field-full">
+                            <label for="loan_type">Loan Type</label>
+                            <select id="loan_type" name="loan_type">
+                                <option value="">Select type</option>
+                                <option value="Conventional">Conventional</option>
+                                <option value="FHA">FHA</option>
+                                <option value="VA">VA</option>
+                                <option value="USDA">USDA</option>
+                                <option value="Jumbo">Jumbo</option>
+                                <option value="DSCR">DSCR</option>
+                                <option value="Bank Statements">Bank Statements</option>
+                                <option value="P&L">P&L</option>
+                                <option value="Other Non-QM">Other Non-QM</option>
+                                <option value="HELOC">HELOC</option>
+                                <option value="HELOAN">HELOAN</option>
+                                <option value="Reverse">Reverse</option>
+                            </select>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_dscr_ratio" data-show-when="loan_type" data-show-values="DSCR">
+                            <label for="dscr_ratio">DSCR Ratio</label>
+                            <input type="number" id="dscr_ratio" name="dscr_ratio" step="0.01" min="0.5" max="2" placeholder="0.50 to 2.00">
+                            <span class="hint">Range from 0.50 to 2.00.</span>
+                        </div>
+                        <div class="field-group">
+                            <label for="program">Program / Term</label>
+                            <select id="program" name="program">
+                                <option value="">Select program</option>
+                                <option value="30 Year Fixed">30 Year Fixed</option>
+                                <option value="25 Year Fixed">25 Year Fixed</option>
+                                <option value="20 Year Fixed">20 Year Fixed</option>
+                                <option value="15 Year Fixed">15 Year Fixed</option>
+                                <option value="10 Year Fixed">10 Year Fixed</option>
+                                <option value="5/1 ARM" class="term-dscr">5/1 ARM</option>
+                                <option value="7/1 ARM" class="term-dscr">7/1 ARM</option>
+                                <option value="10/1 ARM" class="term-dscr">10/1 ARM</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="note_rate_requested">Note Rate Requested (%)</label>
+                            <input type="number" id="note_rate_requested" name="note_rate_requested" step="0.001" min="0" max="100" placeholder="To 3rd decimal">
+                        </div>
+                        <div class="field-group field-full">
+                            <label>Broker Compensation</label>
+                            <div class="radio-row">
+                                <label class="radio-option">
+                                    <input type="radio" name="broker_compensation" value="Points" id="broker_points">
+                                    Points
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="broker_compensation" value="Minimum Fee" id="broker_min_fee">
+                                    Minimum Fee
+                                </label>
+                            </div>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_broker_points" data-show-when="broker_compensation" data-show-values="Points">
+                            <label for="broker_compensation_points">Broker Compensation Points (%)</label>
+                            <input type="number" id="broker_compensation_points" name="broker_compensation_points" step="0.001" min="0" max="4" placeholder="Up to 4.000%, 3 decimals">
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_broker_min_fee" data-show-when="broker_compensation" data-show-values="Minimum Fee">
+                            <label for="broker_compensation_min_fee">Broker Compensation Minimum Fee ($)</label>
+                            <input type="number" id="broker_compensation_min_fee" name="broker_compensation_min_fee" min="0" max="9999" step="1" placeholder="Up to $9,999">
+                        </div>
+                        <div class="field-group">
+                            <label for="processing_fee">Processing Fee ($)</label>
+                            <input type="number" id="processing_fee" name="processing_fee" min="0" max="9999" step="1" placeholder="Up to $9,999">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. Loan Info -->
+                <section class="section">
+                    <h2 class="section-title">Loan Info</h2>
+                    <div class="section-fields">
+                        <div class="field-group">
+                            <label for="loan_number">Loan Number</label>
+                            <input type="text" id="loan_number" name="loan_number" placeholder="Loan number">
+                        </div>
+                        <div class="field-group field-full">
+                            <label for="lender">Lender</label>
+                            <select id="lender" name="lender">
+                                <option value="">Select lender</option>
+                                <option value="Deephaven Mortgage">Deephaven Mortgage</option>
+                                <option value="Rocket Mortgage">Rocket Mortgage</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_lender_other" data-show-when="lender" data-show-values="Other">
+                            <label for="lender_other">Lender Other</label>
+                            <input type="text" id="lender_other" name="lender_other" placeholder="Specify lender">
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_loan_docs_name" data-show-when="lender" data-show-values="Deephaven Mortgage">
+                            <label>Loan Documents In Name Of (Get Screenshot of Vesting)</label>
+                            <div class="radio-row">
+                                <label class="radio-option"><input type="radio" name="loan_docs_in_name_of" value="Individual"> Individual</label>
+                                <label class="radio-option"><input type="radio" name="loan_docs_in_name_of" value="LLC"> LLC</label>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label>Rental Use</label>
+                            <div class="radio-row">
+                                <label class="radio-option"><input type="radio" name="rental_use" value="Long Term Rental"> Long Term Rental</label>
+                                <label class="radio-option"><input type="radio" name="rental_use" value="Short Term Rental"> Short Term Rental</label>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label for="rents_collected">Rents Collected ($)</label>
+                            <input type="number" id="rents_collected" name="rents_collected" min="0" max="999999" step="1" placeholder="Up to $999,999">
+                            <span class="hint">Dollar amount, no decimal places.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. Processing Info -->
+                <section class="section">
+                    <h2 class="section-title">Processing Info</h2>
+                    <div class="section-fields">
+                        <div class="field-group field-full">
+                            <label for="title_held_in">Title Will Be Held In Manner</label>
+                            <select id="title_held_in" name="title_held_in">
+                                <option value="">Select</option>
+                                <option value="Individual">Individual</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_title_held_other" data-show-when="title_held_in" data-show-values="Other">
+                            <label for="title_held_in_other">Title Will Be Held In Manner Other</label>
+                            <input type="text" id="title_held_in_other" name="title_held_in_other" placeholder="Specify">
+                        </div>
+                        <div class="field-group">
+                            <label>Use Borrower's Title Company</label>
+                            <div class="radio-row">
+                                <label class="radio-option"><input type="radio" name="use_borrower_title" value="Yes"> Yes</label>
+                                <label class="radio-option"><input type="radio" name="use_borrower_title" value="No"> No</label>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label for="processor">Processor</label>
+                            <input type="text" id="processor" name="processor" placeholder="Processor name">
+                        </div>
+                        <div class="field-group">
+                            <label for="appraisal_company">Appraisal Company</label>
+                            <input type="text" id="appraisal_company" name="appraisal_company" placeholder="Appraisal company">
+                        </div>
+                        <div class="field-group field-full">
+                            <label for="notes">Notes</label>
+                            <textarea id="notes" name="notes" placeholder="Additional notes"></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="submit-row">
+                    <button type="submit" class="btn-submit">Submit Registration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            var form = document.getElementById('opportunity-form');
+
+            function getTriggerValue(fieldName) {
+                var el = document.querySelector('[name="' + fieldName + '"]');
+                if (!el) return '';
+                if (el.type === 'radio') {
+                    var r = form.querySelector('[name="' + fieldName + '"]:checked');
+                    return r ? r.value : '';
+                }
+                return el.value || '';
+            }
+
+            function parseShowValues(attr) {
+                if (!attr) return [];
+                return attr.split(',').map(function(s) { return s.trim(); });
+            }
+
+            function updateConditionalFields() {
+                var wrappers = form.querySelectorAll('.conditional-field[data-show-when]');
+                wrappers.forEach(function(wrap) {
+                    var triggerName = wrap.getAttribute('data-show-when');
+                    var allowed = parseShowValues(wrap.getAttribute('data-show-values'));
+                    var current = getTriggerValue(triggerName);
+                    var show = allowed.indexOf(current) !== -1;
+                    wrap.classList.toggle('hidden', !show);
+                });
+
+                // Program/Term: show ARM options only when Loan Type is DSCR
+                var programSelect = document.getElementById('program');
+                var loanType = getTriggerValue('loan_type');
+                var armOptions = programSelect ? programSelect.querySelectorAll('option.term-dscr') : [];
+                armOptions.forEach(function(opt) {
+                    opt.style.display = loanType === 'DSCR' ? '' : 'none';
+                    if (loanType !== 'DSCR' && opt.selected) {
+                        programSelect.value = '';
+                    }
+                });
+            }
+
+            ['purpose', 'occupancy', 'loan_type', 'lender', 'title_held_in'].forEach(function(name) {
+                var el = form.querySelector('[name="' + name + '"]');
+                if (el) el.addEventListener('change', updateConditionalFields);
+            });
+
+            form.querySelectorAll('input[name="broker_compensation"]').forEach(function(r) {
+                r.addEventListener('change', updateConditionalFields);
+            });
+
+            updateConditionalFields();
+
+            // Pre-fill form from initial data (e.g. after load from existing submission)
+            var initialEl = document.getElementById('initial-form-data');
+            if (initialEl) {
+                try {
+                    var initial = JSON.parse(initialEl.textContent);
+                    for (var key in initial) {
+                        var val = initial[key];
+                        if (val === null || val === undefined) continue;
+                        var el = form.querySelector('[name="' + key + '"]');
+                        if (!el) continue;
+                        if (el.type === 'radio') {
+                            form.querySelectorAll('[name="' + key + '"]').forEach(function(r) {
+                                r.checked = (r.value === String(val));
+                            });
+                        } else {
+                            el.value = val;
+                        }
+                    }
+                    updateConditionalFields();
+                } catch (err) {}
+            }
+        })();
+    </script>
+</body>
+</html>

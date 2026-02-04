@@ -11,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib import colors
-from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload
+from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload, OpportunityCardSubmission
 
 
 @require_http_methods(["GET"])
@@ -150,6 +150,59 @@ def get_print_groups(request):
         for pg in print_groups
     ]
     return JsonResponse({'print_groups': data}, safe=False)
+
+
+# All form field names from opportunity card template (for saving)
+OPPORTUNITY_CARD_FIELD_NAMES = [
+    'street', 'city', 'state', 'zip_code', 'property_type', 'units',
+    'amount_existing_liens', 'purpose', 'occupancy', 'appraisal_value', 'purchase_price',
+    'loan_amount', 'cash_out_amount', 'credit_score', 'loan_type', 'dscr_ratio', 'program',
+    'note_rate_requested', 'ppp_request', 'broker_compensation', 'broker_compensation_points',
+    'broker_compensation_min_fee', 'processing_fee', 'loan_number', 'lender', 'lender_other',
+    'loan_docs_in_name_of', 'rental_use', 'rents_collected', 'title_held_in', 'title_held_in_other',
+    'use_borrower_title', 'processor', 'appraisal_company', 'notes',
+]
+
+
+def opportunity_card_form(request, request_id):
+    """
+    Opportunity Card – Registration Form with conditional fields.
+    URL: {request_id}/opportunity-card/
+    GET: show form (optionally pre-filled from existing submission).
+    POST: save form data to OpportunityCardSubmission and show success.
+    """
+    if request.method == 'POST':
+        form_data = {}
+        for key in OPPORTUNITY_CARD_FIELD_NAMES:
+            value = request.POST.get(key)
+            if value is not None:
+                form_data[key] = value.strip() if isinstance(value, str) else value
+        submission, created = OpportunityCardSubmission.objects.update_or_create(
+            request_id=request_id,
+            defaults={'form_data': form_data}
+        )
+        context = {
+            'request_id': request_id,
+            'success': True,
+            'message': 'Registration submitted successfully.' if created else 'Registration updated successfully.',
+            'initial': submission.form_data or {},
+        }
+        return render(request, 'documents/opportunity_card_form.html', context)
+
+    # GET: show form
+    initial = {}
+    try:
+        existing = OpportunityCardSubmission.objects.get(request_id=request_id)
+        initial = existing.form_data or {}
+    except OpportunityCardSubmission.DoesNotExist:
+        pass
+
+    context = {
+        'request_id': request_id,
+        'initial': initial,
+        'success': False,
+    }
+    return render(request, 'documents/opportunity_card_form.html', context)
 
 
 def homepage(request, request_id):

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload
+from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload, OpportunityCardSubmission
 
 
 @admin.register(Category)
@@ -75,3 +75,12 @@ class UserDocumentUploadAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('admin_selection__document', 'admin_selection__request')
+
+
+@admin.register(OpportunityCardSubmission)
+class OpportunityCardSubmissionAdmin(admin.ModelAdmin):
+    list_display = ['request_id', 'submitted_at']
+    search_fields = ['request_id']
+    list_filter = ['submitted_at']
+    readonly_fields = ['request_id', 'form_data', 'submitted_at']
+    fields = ['request_id', 'form_data', 'submitted_at']
