@@ -160,7 +160,8 @@ OPPORTUNITY_CARD_FIELD_NAMES = [
     'note_rate_requested', 'ppp_request', 'broker_compensation', 'broker_compensation_points',
     'broker_compensation_min_fee', 'processing_fee', 'loan_number', 'lender', 'lender_other',
     'loan_docs_in_name_of', 'rental_use', 'rents_collected', 'title_held_in', 'title_held_in_other',
-    'use_borrower_title', 'processor', 'appraisal_company', 'notes',
+    'use_borrower_title', 'title_company_name', 'title_company_contact', 'title_company_phone', 'title_company_email',
+    'processor', 'appraisal_company', 'notes',
 ]
 
 
