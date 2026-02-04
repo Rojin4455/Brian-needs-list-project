@@ -1,7 +1,7 @@
 from django.http import JsonResponse, Http404, HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import render, get_object_or_404
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 import json
 from io import BytesIO
@@ -164,14 +164,15 @@ OPPORTUNITY_CARD_FIELD_NAMES = [
 ]
 
 
-@ensure_csrf_cookie
+@csrf_exempt
 def opportunity_card_form(request, request_id):
     """
     Opportunity Card – Registration Form with conditional fields.
     URL: {request_id}/opportunity-card/
     GET: show form (optionally pre-filled from existing submission).
     POST: save form data to OpportunityCardSubmission and show success.
-    Ensures CSRF cookie is set on GET so form submit works (e.g. when opened via direct link).
+    CSRF-exempt so the form works when embedded in an iframe on other origins (e.g. GoHighLevel).
+    Submissions are still scoped by unique request_id.
     """
     if request.method == 'POST':
         form_data = {}

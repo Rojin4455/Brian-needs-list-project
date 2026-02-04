@@ -30,6 +30,12 @@ DEBUG = True
 # Also ensure your IP is in ALLOWED_HOSTS
 ALLOWED_HOSTS = ['3.106.189.174', 'localhost', '127.0.0.1','docs.bestrentalpropertyloansusa.com']
 
+# Allow CSRF when form is embedded in iframe on these origins (e.g. GoHighLevel)
+CSRF_TRUSTED_ORIGINS = [
+    'https://app.gohighlevel.com',
+    'http://app.gohighlevel.com',
+]
+
 # Application definition
 
 INSTALLED_APPS = [
