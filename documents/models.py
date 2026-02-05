@@ -3,10 +3,19 @@ from django.db import models
 
 class Category(models.Model):
     """
-    Represents a document category (e.g., Assets, Credit, Entity, Income, Property)
+    Represents a document category (e.g., Assets, Credit, Entity, Income, Property).
+    If request is set, the category is request-scoped (custom for that request only).
     """
-    name = models.CharField(max_length=100, unique=True, help_text="Category name (e.g., Assets, Credit, Entity)")
+    name = models.CharField(max_length=100, help_text="Category name (e.g., Assets, Credit, Entity)")
     description = models.TextField(blank=True, null=True, help_text="Optional description of the category")
+    request = models.ForeignKey(
+        'DocumentRequest',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='custom_categories',
+        help_text="If set, this category is visible only for this request (custom ad hoc/individual/needs list category)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -22,9 +31,18 @@ class PrintGroup(models.Model):
     """
     Represents a print group that documents can belong to.
     Examples: Profit & Loss, Conventional Refinance (W-2), FHA Refinance (W-2), VA Refinance (W-2), etc.
+    If request is set, the print group is request-scoped (custom for that request only).
     """
-    name = models.CharField(max_length=200, unique=True, help_text="Print group name")
+    name = models.CharField(max_length=200, help_text="Print group name")
     description = models.TextField(blank=True, null=True, help_text="Optional description of the print group")
+    request = models.ForeignKey(
+        'DocumentRequest',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='custom_print_groups',
+        help_text="If set, this print group is visible only for this request (custom needs list group)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -39,6 +57,7 @@ class Document(models.Model):
     """
     Represents a document that may be required for loan processing.
     Each document belongs to a category and can be associated with multiple print groups.
+    If request is set, the document is request-scoped (custom doc for that request only).
     """
     name = models.CharField(
         max_length=300,
@@ -52,6 +71,14 @@ class Document(models.Model):
         on_delete=models.CASCADE,
         related_name='documents',
         help_text="The category this document belongs to"
+    )
+    request = models.ForeignKey(
+        'DocumentRequest',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='custom_documents',
+        help_text="If set, this document is visible only for this request (custom ad hoc/individual/needs list doc)"
     )
     print_groups = models.ManyToManyField(
         PrintGroup,

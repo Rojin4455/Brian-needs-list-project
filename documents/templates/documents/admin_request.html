@@ -253,6 +253,10 @@
             transform: translateY(-2px);
         }
 
+        .btn-loading { pointer-events: none; opacity: 0.85; cursor: not-allowed; }
+        .btn-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: btn-spin 0.6s linear infinite; vertical-align: middle; margin-right: 8px; }
+        @keyframes btn-spin { to { transform: rotate(360deg); } }
+
         .alert {
             padding: 12px 16px;
             border-radius: 8px;
@@ -423,7 +427,7 @@
 
         async function loadCategories() {
             try {
-                const response = await fetch('/api/categories/');
+                const response = await fetch(`/api/categories/?request_id=${requestId}`);
                 const data = await response.json();
                 allCategories = data.categories;
                 
@@ -445,7 +449,7 @@
 
         async function loadDocuments() {
             try {
-                const response = await fetch('/api/documents/');
+                const response = await fetch(`/api/documents/?request_id=${requestId}`);
                 const data = await response.json();
                 allDocuments = data.documents;
             } catch (error) {
@@ -455,7 +459,7 @@
 
         async function loadPrintGroups() {
             try {
-                const response = await fetch('/api/print-groups/');
+                const response = await fetch(`/api/print-groups/?request_id=${requestId}`);
                 const data = await response.json();
                 allPrintGroups = data.print_groups;
                 renderPrintGroups();
@@ -482,7 +486,7 @@
         async function selectPrintGroup(printGroupId) {
             selectedPrintGroup = printGroupId;
             try {
-                const response = await fetch(`/api/documents/?print_group_id=${printGroupId}`);
+                const response = await fetch(`/api/documents/?request_id=${requestId}&print_group_id=${printGroupId}`);
                 const data = await response.json();
                 sectionData.needs_list.available = data.documents;
                 sectionData.needs_list.selected = [];
@@ -560,6 +564,20 @@
             renderSection(section);
         }
 
+        function setButtonLoading(btn, loading) {
+            if (!btn) return;
+            if (loading) {
+                btn.disabled = true;
+                btn.classList.add('btn-loading');
+                btn.dataset.originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="btn-spinner"></span> Saving...';
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('btn-loading');
+                btn.innerHTML = btn.dataset.originalText || btn.innerHTML;
+            }
+        }
+
         async function saveSection(sectionType) {
             const data = sectionData[sectionType];
             if (data.selected.length === 0) {
@@ -571,6 +589,10 @@
                 showAlert(sectionType, 'Please select a need list first', 'error');
                 return;
             }
+
+            const sectionId = sectionType === 'needs_list' ? 'needs-list-section' : sectionType + '-section';
+            const saveBtn = document.querySelector('#' + sectionId + ' .btn-save');
+            setButtonLoading(saveBtn, true);
 
             const payload = {
                 section_type: sectionType,
@@ -602,6 +624,8 @@
             } catch (error) {
                 showAlert(sectionType, 'Error saving selections', 'error');
                 console.error('Error:', error);
+            } finally {
+                setButtonLoading(saveBtn, false);
             }
         }
 

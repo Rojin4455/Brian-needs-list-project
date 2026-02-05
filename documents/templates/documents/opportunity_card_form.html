@@ -206,6 +206,10 @@
             box-shadow: 0 6px 20px rgba(26, 95, 74, 0.4);
         }
 
+        .btn-submit:disabled, .btn-loading { pointer-events: none; opacity: 0.85; cursor: not-allowed; }
+        .btn-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: btn-spin 0.6s linear infinite; vertical-align: middle; margin-right: 8px; }
+        @keyframes btn-spin { to { transform: rotate(360deg); } }
+
         .success-message {
             margin: 0 40px 20px;
             padding: 14px 18px;
@@ -251,7 +255,7 @@
                         <div class="field-group">
                             <label for="state">State</label>
                             <select id="state" name="state">
-                                <option value="">Select state</option>
+                                <option value="">Select</option>
                                 <option value="AK">AK</option>
                                 <option value="AL">AL</option>
                                 <option value="AR">AR</option>
@@ -311,7 +315,7 @@
                         <div class="field-group">
                             <label for="property_type">Property Type</label>
                             <select id="property_type" name="property_type">
-                                <option value="">Select type</option>
+                                <option value="">Select</option>
                                 <option value="Condominium">Condominium</option>
                                 <option value="Detached (SFR)">Detached (SFR)</option>
                                 <option value="Detached Condo">Detached Condo</option>
@@ -319,6 +323,7 @@
                                 <option value="Manufactured Home">Manufactured Home</option>
                                 <option value="PUD Attached">PUD Attached</option>
                                 <option value="PUD Detached">PUD Detached</option>
+                                <option value="Other">Other</option>
                             </select>
                         </div>
                         <div class="field-group">
@@ -329,6 +334,7 @@
                                 <option value="2">2</option>
                                 <option value="3">3</option>
                                 <option value="4">4</option>
+                                <option value="5-10">5-10</option>
                             </select>
                         </div>
                     </div>
@@ -341,7 +347,7 @@
                         <div class="field-group field-full">
                             <label for="purpose">Purpose</label>
                             <select id="purpose" name="purpose">
-                                <option value="">Select purpose</option>
+                                <option value="">Select</option>
                                 <option value="Purchase">Purchase</option>
                                 <option value="Cash Out Refinance">Cash Out Refinance</option>
                                 <option value="No Cash Out Refinance">No Cash Out Refinance</option>
@@ -353,7 +359,7 @@
                         <div class="field-group conditional-field" id="wrap_amount_existing_liens" data-show-when="purpose" data-show-values="Cash Out Refinance,No Cash Out Refinance">
                             <label for="amount_existing_liens">Amount Existing Liens</label>
                             <input type="number" id="amount_existing_liens" name="amount_existing_liens" min="0" max="20000000" step="1" placeholder="Up to $20,000,000" title="Dollar amount, up to $20,000,000. No decimal places.">
-                            <span class="hint">Currency: dollar amount, up to $20,000,000. No decimal places.</span>
+                            <span class="hint">Dollar amount, no decimal places.</span>
                         </div>
                         <div class="field-group conditional-field" id="wrap_purchase_price" data-show-when="purpose" data-show-values="Purchase,Construction,Construction Permanent">
                             <label for="purchase_price">Purchase Price</label>
@@ -403,7 +409,7 @@
                         <div class="field-group field-full">
                             <label for="loan_type">Loan Type</label>
                             <select id="loan_type" name="loan_type">
-                                <option value="">Select type</option>
+                                <option value="">Select</option>
                                 <option value="Conventional">Conventional</option>
                                 <option value="FHA">FHA</option>
                                 <option value="VA">VA</option>
@@ -423,18 +429,31 @@
                             <input type="number" id="dscr_ratio" name="dscr_ratio" step="0.01" min="0.5" max="2" placeholder="0.50 to 2.00">
                             <span class="hint">Range from 0.50 to 2.00.</span>
                         </div>
+                        <div class="field-group conditional-field" id="wrap_rental_use" data-show-when="loan_type" data-show-values="DSCR">
+                            <label>Rental Use</label>
+                            <div class="radio-row">
+                                <label class="radio-option"><input type="radio" name="rental_use" value="Long Term Rental"> Long Term Rental</label>
+                                <label class="radio-option"><input type="radio" name="rental_use" value="Short Term Rental"> Short Term Rental</label>
+                            </div>
+                        </div>
+                        <div class="field-group conditional-field" id="wrap_rents_collected" data-show-when="loan_type" data-show-values="DSCR">
+                            <label for="rents_collected">Rents Collected ($)</label>
+                            <input type="number" id="rents_collected" name="rents_collected" min="0" max="999999" step="1" placeholder="Up to $999,999">
+                            <span class="hint">Dollar amount, no decimal places.</span>
+                        </div>
                         <div class="field-group">
                             <label for="program">Program / Term</label>
                             <select id="program" name="program">
-                                <option value="">Select program</option>
+                                <option value="">Select</option>
+                                <option value="40 Year Fixed">40 Year Fixed</option>
                                 <option value="30 Year Fixed">30 Year Fixed</option>
                                 <option value="25 Year Fixed">25 Year Fixed</option>
                                 <option value="20 Year Fixed">20 Year Fixed</option>
                                 <option value="15 Year Fixed">15 Year Fixed</option>
                                 <option value="10 Year Fixed">10 Year Fixed</option>
-                                <option value="5/1 ARM" class="term-dscr">5/1 ARM</option>
-                                <option value="7/1 ARM" class="term-dscr">7/1 ARM</option>
-                                <option value="10/1 ARM" class="term-dscr">10/1 ARM</option>
+                                <option value="5/1 ARM">5/1 ARM</option>
+                                <option value="7/1 ARM">7/1 ARM</option>
+                                <option value="10/1 ARM">10/1 ARM</option>
                             </select>
                         </div>
                         <div class="field-group">
@@ -480,7 +499,7 @@
                         <div class="field-group field-full">
                             <label for="lender">Lender</label>
                             <select id="lender" name="lender">
-                                <option value="">Select lender</option>
+                                <option value="">Select</option>
                                 <option value="Deephaven Mortgage">Deephaven Mortgage</option>
                                 <option value="Rocket Mortgage">Rocket Mortgage</option>
                                 <option value="Other">Other</option>
@@ -496,18 +515,6 @@
                                 <label class="radio-option"><input type="radio" name="loan_docs_in_name_of" value="Individual"> Individual</label>
                                 <label class="radio-option"><input type="radio" name="loan_docs_in_name_of" value="LLC"> LLC</label>
                             </div>
-                        </div>
-                        <div class="field-group">
-                            <label>Rental Use</label>
-                            <div class="radio-row">
-                                <label class="radio-option"><input type="radio" name="rental_use" value="Long Term Rental"> Long Term Rental</label>
-                                <label class="radio-option"><input type="radio" name="rental_use" value="Short Term Rental"> Short Term Rental</label>
-                            </div>
-                        </div>
-                        <div class="field-group">
-                            <label for="rents_collected">Rents Collected ($)</label>
-                            <input type="number" id="rents_collected" name="rents_collected" min="0" max="999999" step="1" placeholder="Up to $999,999">
-                            <span class="hint">Dollar amount, no decimal places.</span>
                         </div>
                     </div>
                 </section>
@@ -601,17 +608,6 @@
                     var show = allowed.indexOf(current) !== -1;
                     wrap.classList.toggle('hidden', !show);
                 });
-
-                // Program/Term: show ARM options only when Loan Type is DSCR
-                var programSelect = document.getElementById('program');
-                var loanType = getTriggerValue('loan_type');
-                var armOptions = programSelect ? programSelect.querySelectorAll('option.term-dscr') : [];
-                armOptions.forEach(function(opt) {
-                    opt.style.display = loanType === 'DSCR' ? '' : 'none';
-                    if (loanType !== 'DSCR' && opt.selected) {
-                        programSelect.value = '';
-                    }
-                });
             }
 
             ['purpose', 'occupancy', 'loan_type', 'lender', 'title_held_in'].forEach(function(name) {
@@ -625,6 +621,16 @@
 
             form.querySelectorAll('input[name="use_borrower_title"]').forEach(function(r) {
                 r.addEventListener('change', updateConditionalFields);
+            });
+
+            form.addEventListener('submit', function() {
+                var btn = form.querySelector('.btn-submit');
+                if (btn && !btn.disabled) {
+                    btn.disabled = true;
+                    btn.classList.add('btn-loading');
+                    btn.dataset.originalText = btn.innerHTML;
+                    btn.innerHTML = '<span class="btn-spinner"></span> Submitting...';
+                }
             });
 
             updateConditionalFields();

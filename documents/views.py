@@ -3,6 +3,7 @@ from django.views.decorators.http import require_http_methods
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
+from django.db.models import Q
 import json
 from io import BytesIO
 import html
@@ -19,8 +20,15 @@ def get_categories(request):
     """
     API endpoint to get all categories
     GET /api/categories/
+    Query parameters:
+    - request_id: When provided, return only global categories + custom categories for this request (optional)
     """
-    categories = Category.objects.all()
+    categories = Category.objects.select_related('request')
+    request_id = request.GET.get('request_id')
+    if request_id:
+        categories = categories.filter(Q(request__isnull=True) | Q(request__request_id=request_id))
+    else:
+        categories = categories.all()
     data = [
         {
             'id': category.id,
@@ -40,24 +48,33 @@ def create_category(request):
     """
     API endpoint to create a new category
     POST /api/categories/create/
-    Body: JSON with name and description (optional)
+    Body: JSON with name, description (optional), request_id (optional - when provided, category is scoped to that request)
     """
     try:
         data = json.loads(request.body)
         name = data.get('name')
         description = data.get('description', '')
+        request_id = data.get('request_id')
         
         if not name:
             return JsonResponse({'error': 'Missing required field: name'}, status=400)
         
-        # Check if category already exists
-        if Category.objects.filter(name=name).exists():
-            return JsonResponse({'error': 'Category with this name already exists'}, status=400)
+        doc_request = None
+        if request_id:
+            doc_request, _ = DocumentRequest.objects.get_or_create(request_id=request_id)
+            # For request-scoped categories, only check uniqueness within this request
+            if Category.objects.filter(name=name, request=doc_request).exists():
+                return JsonResponse({'error': 'A category with this name already exists for this request'}, status=400)
+        else:
+            # Global category: check uniqueness among global categories only
+            if Category.objects.filter(name=name, request__isnull=True).exists():
+                return JsonResponse({'error': 'Category with this name already exists'}, status=400)
         
-        # Create the category
+        # Create the category (request-scoped if request_id provided)
         category = Category.objects.create(
             name=name,
-            description=description or f'Category: {name}'
+            description=description or f'Category: {name}',
+            request=doc_request
         )
         
         return JsonResponse({
@@ -82,10 +99,18 @@ def get_documents(request):
     GET /api/documents/
     
     Query parameters:
+    - request_id: When provided, return only global documents + custom documents for this request (optional)
     - category_id: Filter by category ID (optional)
     - print_group_id: Filter by print group ID (optional)
     """
-    documents = Document.objects.select_related('category').prefetch_related('print_groups').all()
+    documents = Document.objects.select_related('category', 'request').prefetch_related('print_groups')
+    
+    # When request_id is provided, show only global docs (request is null) + custom docs for this request
+    request_id = request.GET.get('request_id')
+    if request_id:
+        documents = documents.filter(Q(request__isnull=True) | Q(request__request_id=request_id))
+    else:
+        documents = documents.all()
     
     # Filter by category if provided
     category_id = request.GET.get('category_id')
@@ -130,9 +155,17 @@ def get_print_groups(request):
     GET /api/print-groups/
     
     Query parameters:
+    - request_id: When provided, return only global print groups + custom print groups for this request (optional)
     - document_id: Filter by document ID to get print groups for a specific document (optional)
     """
-    print_groups = PrintGroup.objects.all()
+    print_groups = PrintGroup.objects.select_related('request')
+    
+    # When request_id is provided, show only global (request is null) + custom print groups for this request
+    request_id = request.GET.get('request_id')
+    if request_id:
+        print_groups = print_groups.filter(Q(request__isnull=True) | Q(request__request_id=request_id))
+    else:
+        print_groups = print_groups.all()
     
     # Filter by document if provided
     document_id = request.GET.get('document_id')
@@ -368,8 +401,10 @@ def adhoc_page(request, request_id):
         section_type='adhoc'
     ).select_related('document', 'document__category')
     
-    # Get all categories for the form
-    categories = Category.objects.all()
+    # Get categories: global + custom for this request only
+    categories = Category.objects.filter(
+        Q(request__isnull=True) | Q(request=doc_request)
+    ).order_by('name')
     
     import json as json_module
     context = {
@@ -405,8 +440,10 @@ def individual_documents_page(request, request_id):
     
     selected_document_ids = [sel.document.id for sel in existing_selections]
     
-    # Get all categories for custom document creation
-    categories = Category.objects.all()
+    # Get categories: global + custom for this request only
+    categories = Category.objects.filter(
+        Q(request__isnull=True) | Q(request=doc_request)
+    ).order_by('name')
     
     import json as json_module
     context = {
@@ -451,8 +488,8 @@ def needs_list_page(request, request_id):
             selected_by_print_group[pg_key] = []
         selected_by_print_group[pg_key].append(sel.document.id)
         
-        # Collect custom print groups and their documents
-        if sel.print_group:
+        # Collect custom print groups and their documents (only global or belonging to this request)
+        if sel.print_group and (sel.print_group.request_id is None or sel.print_group.request_id == doc_request.id):
             pg_exists = any(pg['id'] == sel.print_group.id for pg in custom_print_groups)
             if not pg_exists:
                 custom_print_groups.append({
@@ -473,8 +510,10 @@ def needs_list_page(request, request_id):
                     })
                     break
     
-    # Get all categories and print groups for custom creation
-    categories = Category.objects.all()
+    # Get categories: global + custom for this request only
+    categories = Category.objects.filter(
+        Q(request__isnull=True) | Q(request=doc_request)
+    ).order_by('name')
     all_print_groups = PrintGroup.objects.all()
     
     import json as json_module
@@ -627,11 +666,12 @@ def create_adhoc_document(request, request_id):
         except Category.DoesNotExist:
             return JsonResponse({'error': 'Category not found'}, status=404)
         
-        # Create the document
+        # Create the document (request-scoped so it appears only for this request)
         document = Document.objects.create(
             name=name,
             description=description,
-            category=category
+            category=category,
+            request=doc_request
         )
         
         # Create admin selection for this adhoc document
@@ -686,11 +726,12 @@ def create_individual_document(request, request_id):
         except Category.DoesNotExist:
             return JsonResponse({'error': 'Category not found'}, status=404)
         
-        # Create the document
+        # Create the document (request-scoped so it appears only for this request)
         document = Document.objects.create(
             name=name,
             description=description,
-            category=category
+            category=category,
+            request=doc_request
         )
         
         # Create admin selection for this individual document
@@ -739,10 +780,11 @@ def create_needs_list_print_group(request, request_id):
         if not name:
             return JsonResponse({'error': 'Missing required field: name'}, status=400)
         
-        # Create the print group
+        # Create the print group (request-scoped so it appears only for this request)
         print_group = PrintGroup.objects.create(
             name=name,
-            description=description or f'Print group: {name}'
+            description=description or f'Print group: {name}',
+            request=doc_request
         )
         
         return JsonResponse({
@@ -791,11 +833,12 @@ def create_needs_list_document(request, request_id):
         except PrintGroup.DoesNotExist:
             return JsonResponse({'error': 'Print group not found'}, status=404)
         
-        # Create the document
+        # Create the document (request-scoped so it appears only for this request)
         document = Document.objects.create(
             name=name,
             description=description,
-            category=category
+            category=category,
+            request=doc_request
         )
         
         # Add document to print group
@@ -858,8 +901,9 @@ def delete_adhoc_document(request, request_id, selection_id):
         # Delete the selection
         selection.delete()
         
-        # Optionally delete the document if it's only used for this request
-        # (You might want to keep it for history, so we'll leave it for now)
+        # If this was a request-scoped custom document, delete the document so it no longer appears for this request
+        if document.request_id:
+            document.delete()
         
         return JsonResponse({
             'success': True,

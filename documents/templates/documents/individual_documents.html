@@ -356,6 +356,9 @@
         #alert-container {
             margin-bottom: 20px;
         }
+        .btn-loading { pointer-events: none; opacity: 0.85; cursor: not-allowed; }
+        .btn-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: btn-spin 0.6s linear infinite; vertical-align: middle; margin-right: 8px; }
+        @keyframes btn-spin { to { transform: rotate(360deg); } }
         .alert {
             padding: 12px 16px;
             border-radius: 8px;
@@ -377,11 +380,25 @@
         let allDocuments = [];
         let selectedDocuments = [];
         let categories = [];
-        const existingSelectedIds = {{ selected_document_ids|safe }};
+        const existingSelectedIds = JSON.parse('{{ selected_document_ids|escapejs }}');
+
+        function setButtonLoading(btn, loading) {
+            if (!btn) return;
+            if (loading) {
+                btn.disabled = true;
+                btn.classList.add('btn-loading');
+                btn.dataset.originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="btn-spinner"></span> Loading...';
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('btn-loading');
+                btn.innerHTML = btn.dataset.originalText || btn.innerHTML;
+            }
+        }
 
         async function loadCategories() {
             try {
-                const response = await fetch('/api/categories/');
+                const response = await fetch(`/api/categories/?request_id=${requestId}`);
                 const data = await response.json();
                 categories = data.categories;
                 const select = document.getElementById('category-filter');
@@ -398,7 +415,7 @@
 
         async function loadDocuments() {
             try {
-                const response = await fetch('/api/documents/');
+                const response = await fetch(`/api/documents/?request_id=${requestId}`);
                 const data = await response.json();
                 allDocuments = data.documents;
                 
@@ -493,6 +510,7 @@
         // Handle custom category form submission
         document.getElementById('custom-category-form-individual').addEventListener('submit', async function(e) {
             e.preventDefault();
+            const submitBtn = this.querySelector('button[type="submit"]');
             
             const formData = {
                 name: document.getElementById('custom-category-name-individual').value.trim(),
@@ -504,13 +522,14 @@
                 return;
             }
             
+            setButtonLoading(submitBtn, true);
             try {
                 const response = await fetch('/api/categories/create/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify({ ...formData, request_id: requestId })
                 });
                 
                 const result = await response.json();
@@ -540,12 +559,15 @@
             } catch (error) {
                 showAlert('Error creating category', 'error');
                 console.error('Error:', error);
+            } finally {
+                setButtonLoading(submitBtn, false);
             }
         });
 
         // Handle custom document form submission
         document.getElementById('custom-document-form').addEventListener('submit', async function(e) {
             e.preventDefault();
+            const submitBtn = this.querySelector('button[type="submit"]');
             
             const formData = {
                 name: document.getElementById('custom-name').value.trim(),
@@ -558,6 +580,7 @@
                 return;
             }
             
+            setButtonLoading(submitBtn, true);
             try {
                 const response = await fetch(`/api/${requestId}/admin/individual/create/`, {
                     method: 'POST',
@@ -592,6 +615,8 @@
             } catch (error) {
                 showAlert('Error creating custom document', 'error');
                 console.error('Error:', error);
+            } finally {
+                setButtonLoading(submitBtn, false);
             }
         });
 
@@ -600,6 +625,9 @@
                 showAlert('Please select at least one document', 'error');
                 return;
             }
+
+            const sendBtn = document.querySelector('.btn-send');
+            setButtonLoading(sendBtn, true);
 
             const payload = {
                 section_type: 'individual',
@@ -628,6 +656,8 @@
             } catch (error) {
                 showAlert('Error saving selections', 'error');
                 console.error('Error:', error);
+            } finally {
+                setButtonLoading(sendBtn, false);
             }
         }
 

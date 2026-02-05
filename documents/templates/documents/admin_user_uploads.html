@@ -338,6 +338,10 @@
             background: #e65100;
         }
 
+        .btn-loading { pointer-events: none; opacity: 0.85; cursor: not-allowed; }
+        .btn-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: btn-spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px; }
+        @keyframes btn-spin { to { transform: rotate(360deg); } }
+
         .btn-accepted {
             background: #c8e6c9;
             color: #2e7d32;
@@ -576,7 +580,22 @@
             }, 5000);
         }
 
-        async function toggleAccept(uploadId, accepted) {
+        function setButtonLoading(btn, loading) {
+            if (!btn) return;
+            if (loading) {
+                btn.disabled = true;
+                btn.classList.add('btn-loading');
+                btn.dataset.originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="btn-spinner"></span>';
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('btn-loading');
+                btn.innerHTML = btn.dataset.originalText || btn.innerHTML;
+            }
+        }
+
+        async function toggleAccept(uploadId, accepted, btn) {
+            setButtonLoading(btn, true);
             try {
                 const response = await fetch(`/api/${requestId}/admin/upload/${uploadId}/accept/`, {
                     method: 'POST',
@@ -597,6 +616,8 @@
             } catch (error) {
                 showAlert('Error updating document status', 'error');
                 console.error('Error:', error);
+            } finally {
+                setButtonLoading(btn, false);
             }
         }
 
@@ -606,7 +627,7 @@
                 button.addEventListener('click', function() {
                     const uploadId = this.getAttribute('data-upload-id');
                     const accepted = this.getAttribute('data-accept') === 'true';
-                    toggleAccept(uploadId, accepted);
+                    toggleAccept(uploadId, accepted, this);
                 });
             });
         });
