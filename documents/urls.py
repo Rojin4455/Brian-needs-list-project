@@ -4,6 +4,8 @@ from . import views
 urlpatterns = [
     # Request-based URLs (with request_id)
     path('<str:request_id>/opportunity-card/', views.opportunity_card_form, name='opportunity-card-form'),
+    path('<str:request_id>/opportunity-submission/', views.opportunity_submission_view, name='opportunity-submission-view'),
+    path('<str:request_id>/opportunity-submission/pdf/', views.download_opportunity_submission_pdf, name='download-opportunity-submission-pdf'),
     path('<str:request_id>/request/admin/', views.homepage, name='admin-homepage'),
     path('<str:request_id>/request/admin/adhoc/', views.adhoc_page, name='adhoc'),
     path('<str:request_id>/request/admin/individual-documents/', views.individual_documents_page, name='individual-documents'),

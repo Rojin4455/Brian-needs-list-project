@@ -121,6 +121,7 @@
         .field-group input[type="number"],
         .field-group input[type="tel"],
         .field-group input[type="email"],
+        .field-group input[type="date"],
         .field-group select,
         .field-group textarea {
             width: 100%;
@@ -131,6 +132,37 @@
             font-family: inherit;
             background: #fff;
             transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .field-group input[type="date"] {
+            padding-right: 40px;
+            cursor: pointer;
+            color: var(--text);
+            min-height: 42px;
+        }
+
+        .field-group input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            opacity: 0.6;
+            padding: 4px;
+            margin-left: 4px;
+        }
+
+        .field-group input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+
+        .field-group input[type="date"]:invalid::-webkit-datetime-edit {
+            color: var(--text-muted);
+        }
+
+        .field-group .date-field-wrap {
+            position: relative;
+            display: block;
+        }
+
+        .field-group .date-field-wrap input[type="date"] {
+            width: 100%;
         }
 
         .field-group input:focus,
@@ -457,6 +489,12 @@
                             </select>
                         </div>
                         <div class="field-group">
+                            <label class="radio-option">
+                                <input type="checkbox" id="interest_only" name="interest_only" value="Yes">
+                                Interest Only
+                            </label>
+                        </div>
+                        <div class="field-group">
                             <label for="note_rate_requested">Note Rate Requested (%)</label>
                             <input type="number" id="note_rate_requested" name="note_rate_requested" step="0.001" min="0" max="100" placeholder="To 3rd decimal">
                         </div>
@@ -543,19 +581,19 @@
                             </div>
                         </div>
                         <div class="field-group conditional-field" id="wrap_title_company_name" data-show-when="use_borrower_title" data-show-values="Yes">
-                            <label for="title_company_name">Title Company Name <span class="required">*</span></label>
+                            <label for="title_company_name">Title Company Name</label>
                             <input type="text" id="title_company_name" name="title_company_name" placeholder="Title company name">
                         </div>
                         <div class="field-group conditional-field" id="wrap_title_company_contact" data-show-when="use_borrower_title" data-show-values="Yes">
-                            <label for="title_company_contact">Title Company Contact <span class="required">*</span></label>
+                            <label for="title_company_contact">Title Company Contact</label>
                             <input type="text" id="title_company_contact" name="title_company_contact" placeholder="Contact name">
                         </div>
                         <div class="field-group conditional-field" id="wrap_title_company_phone" data-show-when="use_borrower_title" data-show-values="Yes">
-                            <label for="title_company_phone">Title Company Phone <span class="required">*</span></label>
+                            <label for="title_company_phone">Title Company Phone</label>
                             <input type="tel" id="title_company_phone" name="title_company_phone" placeholder="Phone number">
                         </div>
                         <div class="field-group conditional-field" id="wrap_title_company_email" data-show-when="use_borrower_title" data-show-values="Yes">
-                            <label for="title_company_email">Title Company Email <span class="required">*</span></label>
+                            <label for="title_company_email">Title Company Email</label>
                             <input type="email" id="title_company_email" name="title_company_email" placeholder="Email address">
                         </div>
                         <div class="field-group">
@@ -565,6 +603,13 @@
                         <div class="field-group">
                             <label for="appraisal_company">Appraisal Company</label>
                             <input type="text" id="appraisal_company" name="appraisal_company" placeholder="Appraisal company">
+                        </div>
+                        <div class="field-group">
+                            <label for="credit_report_date">Credit Report Date</label>
+                            <div class="date-field-wrap">
+                                <input type="date" id="credit_report_date" name="credit_report_date" title="Select credit report date">
+                            </div>
+                            <span class="hint">Select a date or use the calendar picker</span>
                         </div>
                         <div class="field-group field-full">
                             <label for="notes">Notes</label>
@@ -649,6 +694,8 @@
                             form.querySelectorAll('[name="' + key + '"]').forEach(function(r) {
                                 r.checked = (r.value === String(val));
                             });
+                        } else if (el.type === 'checkbox') {
+                            el.checked = (val === 'Yes' || val === true || val === 'true');
                         } else {
                             el.value = val;
                         }

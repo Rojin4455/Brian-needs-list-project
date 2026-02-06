@@ -4,7 +4,10 @@ from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 from django.db.models import Q
+from django.urls import reverse
+from django.utils import timezone
 import json
+import logging
 from io import BytesIO
 import html
 from reportlab.lib.pagesizes import letter
@@ -190,12 +193,48 @@ OPPORTUNITY_CARD_FIELD_NAMES = [
     'street', 'city', 'state', 'zip_code', 'property_type', 'units',
     'amount_existing_liens', 'purpose', 'occupancy', 'appraisal_value', 'purchase_price',
     'loan_amount', 'cash_out_amount', 'credit_score', 'loan_type', 'dscr_ratio', 'program',
-    'note_rate_requested', 'ppp_request', 'broker_compensation', 'broker_compensation_points',
+    'interest_only', 'note_rate_requested', 'ppp_request', 'broker_compensation', 'broker_compensation_points',
     'broker_compensation_min_fee', 'processing_fee', 'loan_number', 'lender', 'lender_other',
     'loan_docs_in_name_of', 'rental_use', 'rents_collected', 'title_held_in', 'title_held_in_other',
     'use_borrower_title', 'title_company_name', 'title_company_contact', 'title_company_phone', 'title_company_email',
-    'processor', 'appraisal_company', 'notes',
+    'processor', 'appraisal_company', 'credit_report_date', 'notes',
 ]
+
+# Sections and labels for read-only view and PDF (section title, list of field keys)
+OPPORTUNITY_CARD_SECTIONS = [
+    ("Subject Property", ['street', 'city', 'state', 'zip_code', 'property_type', 'units']),
+    ("Terms and Mortgage", [
+        'purpose', 'amount_existing_liens', 'purchase_price', 'cash_out_amount', 'occupancy', 'ppp_request',
+        'appraisal_value', 'loan_amount', 'credit_score', 'loan_type', 'dscr_ratio', 'rental_use', 'rents_collected',
+        'program', 'interest_only', 'note_rate_requested', 'broker_compensation', 'broker_compensation_points',
+        'broker_compensation_min_fee', 'processing_fee',
+    ]),
+    ("Loan Info", ['loan_number', 'lender', 'lender_other', 'loan_docs_in_name_of']),
+    ("Processing Info", [
+        'title_held_in', 'title_held_in_other', 'use_borrower_title', 'title_company_name', 'title_company_contact',
+        'title_company_phone', 'title_company_email', 'processor', 'appraisal_company', 'credit_report_date', 'notes',
+    ]),
+]
+OPPORTUNITY_CARD_FIELD_LABELS = {
+    'street': 'Street', 'city': 'City', 'state': 'State', 'zip_code': 'Zip Code',
+    'property_type': 'Property Type', 'units': 'Units',
+    'amount_existing_liens': 'Amount Existing Liens', 'purpose': 'Purpose', 'occupancy': 'Occupancy',
+    'appraisal_value': 'Appraisal Value (Estimated)', 'purchase_price': 'Purchase Price',
+    'loan_amount': 'Loan Amount', 'cash_out_amount': 'Cash Out Amount', 'credit_score': 'Credit Score',
+    'loan_type': 'Loan Type', 'dscr_ratio': 'DSCR Ratio', 'program': 'Program / Term',
+    'interest_only': 'Interest Only', 'note_rate_requested': 'Note Rate Requested (%)', 'ppp_request': 'PPP Request',
+    'broker_compensation': 'Broker Compensation', 'broker_compensation_points': 'Broker Compensation Points (%)',
+    'broker_compensation_min_fee': 'Broker Compensation Minimum Fee ($)', 'processing_fee': 'Processing Fee ($)',
+    'loan_number': 'Loan Number', 'lender': 'Lender', 'lender_other': 'Lender Other',
+    'loan_docs_in_name_of': 'Loan Documents In Name Of', 'rental_use': 'Rental Use', 'rents_collected': 'Rents Collected ($)',
+    'title_held_in': 'Title Will Be Held In Manner', 'title_held_in_other': 'Title Will Be Held In Manner Other',
+    'use_borrower_title': "Use Borrower's Title Company", 'title_company_name': 'Title Company Name',
+    'title_company_contact': 'Title Company Contact', 'title_company_phone': 'Title Company Phone',
+    'title_company_email': 'Title Company Email', 'processor': 'Processor', 'appraisal_company': 'Appraisal Company',
+    'credit_report_date': 'Credit Report Date', 'notes': 'Notes',
+}
+
+logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
@@ -218,6 +257,26 @@ def opportunity_card_form(request, request_id):
             request_id=request_id,
             defaults={'form_data': form_data}
         )
+        # Create note on GHL contact only if we don't already have one (avoid duplicate notes on resubmit)
+        if not submission.ghl_note_id:
+            try:
+                from .ghl_service import get_opportunity, create_contact_note
+                opp_data = get_opportunity(request_id)
+                opportunity = opp_data.get("opportunity") or {}
+                contact_id = opportunity.get("contactId")
+                if contact_id:
+                    submitted_date = (submission.submitted_at or timezone.now()).strftime("%Y-%m-%d")
+                    view_url = request.build_absolute_uri(
+                        reverse("opportunity-submission-view", kwargs={"request_id": request_id})
+                    )
+                    note_body = f"Registration Form - {submitted_date} - {view_url}"
+                    result = create_contact_note(contact_id, note_body)
+                    note_id = (result.get("note") or {}).get("id") or result.get("id")
+                    if note_id:
+                        submission.ghl_note_id = note_id
+                        submission.save(update_fields=["ghl_note_id"])
+            except Exception as e:
+                logger.warning("GHL note creation failed for opportunity %s: %s", request_id, e, exc_info=True)
         context = {
             'request_id': request_id,
             'success': True,
@@ -240,6 +299,90 @@ def opportunity_card_form(request, request_id):
         'success': False,
     }
     return render(request, 'documents/opportunity_card_form.html', context)
+
+
+def _opportunity_submission_sections(form_data):
+    """Build list of (section_title, [(label, value), ...]) for display/PDF. Skips empty values."""
+    labels = OPPORTUNITY_CARD_FIELD_LABELS
+    result = []
+    for section_title, keys in OPPORTUNITY_CARD_SECTIONS:
+        rows = []
+        for key in keys:
+            value = form_data.get(key)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                continue
+            if isinstance(value, bool):
+                value = "Yes" if value else "No"
+            elif key == "interest_only" and value in ("Yes", "true", True):
+                value = "Yes"
+            label = labels.get(key, key.replace("_", " ").title())
+            rows.append((label, str(value).strip()))
+        if rows:
+            result.append((section_title, rows))
+    return result
+
+
+@require_http_methods(["GET"])
+def opportunity_submission_view(request, request_id):
+    """
+    Read-only view of an opportunity card submission.
+    URL: {request_id}/opportunity-submission/
+    Shows submitted form data (not editable) and a Download PDF button.
+    """
+    submission = get_object_or_404(OpportunityCardSubmission, request_id=request_id)
+    form_data = submission.form_data or {}
+    sections = _opportunity_submission_sections(form_data)
+    context = {
+        "request_id": request_id,
+        "submission": submission,
+        "form_data": form_data,
+        "sections": sections,
+    }
+    return render(request, "documents/opportunity_submission_view.html", context)
+
+
+@require_http_methods(["GET"])
+def download_opportunity_submission_pdf(request, request_id):
+    """
+    Download a PDF of the opportunity card submission.
+    URL: {request_id}/opportunity-submission/pdf/
+    """
+    submission = get_object_or_404(OpportunityCardSubmission, request_id=request_id)
+    form_data = submission.form_data or {}
+    sections = _opportunity_submission_sections(form_data)
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=inch, leftMargin=inch, topMargin=inch, bottomMargin=inch
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "OpportunityTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=12
+    )
+    heading_style = ParagraphStyle(
+        "SectionHeading", parent=styles["Heading2"], fontSize=12, spaceAfter=8, spaceBefore=12
+    )
+    body_style = styles["Normal"]
+    small_style = ParagraphStyle(
+        "Small", parent=styles["Normal"], fontSize=9, spaceAfter=4, leftIndent=12
+    )
+
+    story = []
+    story.append(Paragraph(f"Registration Form – {html.escape(request_id)}", title_style))
+    story.append(Paragraph(f"Submitted: {submission.submitted_at.strftime('%Y-%m-%d %H:%M') if submission.submitted_at else '—'}", body_style))
+    story.append(Spacer(1, 0.2 * inch))
+
+    for section_title, rows in sections:
+        story.append(Paragraph(html.escape(section_title), heading_style))
+        for label, value in rows:
+            story.append(Paragraph(f"<b>{html.escape(label)}:</b> {html.escape(value)}", small_style))
+        story.append(Spacer(1, 0.1 * inch))
+    doc.build(story)
+    buffer.seek(0)
+    response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="opportunity-submission-{request_id}.pdf"'
+    return response
 
 
 def homepage(request, request_id):

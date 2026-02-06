@@ -253,6 +253,12 @@ class OpportunityCardSubmission(models.Model):
         help_text="All form fields as key-value pairs (street, city, purpose, etc.)"
     )
     submitted_at = models.DateTimeField(auto_now=True)
+    ghl_note_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="GHL contact note ID; when set, we do not create another note on resubmit"
+    )
 
     class Meta:
         ordering = ['-submitted_at']

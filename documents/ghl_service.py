@@ -83,3 +83,37 @@ def delete_media(document_id, alt_type=None, alt_id=None):
         params["altId"] = alt_id
     resp = requests.delete(url, headers=headers, params=params, timeout=30)
     resp.raise_for_status()
+
+
+GHL_OPPORTUNITIES_BASE = "https://services.leadconnectorhq.com/opportunities"
+GHL_CONTACTS_BASE = "https://services.leadconnectorhq.com/contacts"
+
+
+def get_opportunity(opportunity_id):
+    """
+    Fetch a single opportunity from GHL by ID.
+    GET /opportunities/{opportunity_id}
+    :return: dict with 'opportunity' (e.g. id, name, contactId, ...)
+    """
+    headers = _auth_headers()
+    url = f"{GHL_OPPORTUNITIES_BASE}/{opportunity_id}"
+    resp = requests.get(url, headers=headers, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def create_contact_note(contact_id, body):
+    """
+    Create a note on a GHL contact.
+    POST /contacts/{contact_id}/notes
+    :param contact_id: GHL contact ID
+    :param body: note body text
+    :return: dict from API (e.g. note id, etc.)
+    """
+    headers = _auth_headers()
+    headers["Content-Type"] = "application/json"
+    url = f"{GHL_CONTACTS_BASE}/{contact_id}/notes"
+    payload = {"body": body}
+    resp = requests.post(url, headers=headers, json=payload, timeout=30)
+    resp.raise_for_status()
+    return resp.json() if resp.content else {}
