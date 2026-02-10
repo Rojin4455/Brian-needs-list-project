@@ -117,3 +117,30 @@ def create_contact_note(contact_id, body):
     resp = requests.post(url, headers=headers, json=payload, timeout=30)
     resp.raise_for_status()
     return resp.json() if resp.content else {}
+
+
+def update_contact_custom_field(contact_id, field_id, value):
+    """
+    Update a single custom field on a GHL contact.
+    PATCH /contacts/{contact_id}
+
+    :param contact_id: GHL contact ID
+    :param field_id: GHL custom field ID (string)
+    :param value: string value to set
+    :return: dict from API (contact payload)
+    """
+    headers = _auth_headers()
+    headers["Content-Type"] = "application/json"
+    url = f"{GHL_CONTACTS_BASE}/{contact_id}"
+    print(f"Updating custom field {field_id} for contact {contact_id} with value {value}")
+    payload = {
+        "customFields": [
+            {
+                "id": field_id,
+                "value": value,
+            }
+        ]
+    }
+    resp = requests.put(url, headers=headers, json=payload, timeout=30)
+    resp.raise_for_status()
+    return resp.json() if resp.content else {}

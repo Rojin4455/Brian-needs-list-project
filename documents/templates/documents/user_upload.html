@@ -98,37 +98,17 @@
             margin-bottom: 20px;
             padding-bottom: 10px;
             border-bottom: 2px solid #e8f5e9;
-            cursor: pointer;
             user-select: none;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
-
+        
         .section-title:hover {
             color: #1b5e20;
         }
-
-        .section-title::after {
-            content: '▼';
-            font-size: 14px;
-            transition: transform 0.3s;
-        }
-
-        .section-title.collapsed::after {
-            transform: rotate(-90deg);
-        }
-
+        
         .section-content {
-            overflow: hidden;
-            max-height: 9999px;
-            transition: max-height 0.3s ease-out;
-            display: block;
-        }
-
-        .section-content.collapsed {
-            max-height: 0;
-            overflow: hidden;
             display: block;
         }
 
@@ -396,66 +376,10 @@
             <div id="alert-container"></div>
 
             <div class="section">
-                <div class="section-title" onclick="toggleSection(this)">
-                    <span>AD HOC Documents</span>
-                </div>
-                <div class="section-content {% if not adhoc_documents %}collapsed{% endif %}">
-            {% if adhoc_documents %}
-                {% for doc in adhoc_documents %}
-                <div class="document-card" data-selection-id="{{ doc.selection_id }}">
-                    <div class="document-header" onclick="toggleDocument(this)">
-                        <div>
-                            <div class="document-name">{{ doc.document_name }}</div>
-                            <div class="document-description">{{ doc.document_description }}</div>
-                        </div>
-                    </div>
-                    <div class="document-content">
-                    <div class="upload-area" onclick="event.stopPropagation(); document.getElementById('file-{{ doc.selection_id }}').click()">
-                        <div class="upload-icon">📄</div>
-                        <div class="upload-text">Click to upload or drag and drop</div>
-                        <div class="upload-hint">PDF, DOC, DOCX, JPG, PNG (Max 10MB)</div>
-                    </div>
-                    <input type="file" id="file-{{ doc.selection_id }}" class="file-input" 
-                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" 
-                           onchange="uploadFile({{ doc.selection_id }}, this.files[0])">
-                    <div class="uploaded-files" id="uploads-{{ doc.selection_id }}">
-                        {% for upload in doc.uploads %}
-                        <div class="uploaded-file" data-upload-id="{{ upload.id }}">
-                            <div class="file-info">
-                                <div class="file-icon">📎</div>
-                                <div class="file-details">
-                                    <div class="file-name">{{ upload.file_name }}</div>
-                                    <div class="file-date">Uploaded: {{ upload.uploaded_at|date:"M d, Y H:i" }}</div>
-                                    {% if upload.accepted %}
-                                    <div style="font-size: 12px; color: #2e7d32; margin-top: 4px; font-weight: 500;">
-                                        ✓ Accepted{% if upload.accepted_at %} on {{ upload.accepted_at|date:"M d, Y H:i" }}{% endif %}
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="file-actions">
-                                <a href="{{ upload.file_url }}" target="_blank" class="btn btn-view">View</a>
-                                {% if not upload.accepted %}
-                                <button class="btn btn-delete" onclick="deleteUpload({{ upload.id }}, {{ doc.selection_id }})">Delete</button>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state" style="padding: 20px; text-align: center; color: #999;">No documents in this section</div>
-            {% endif %}
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="section-title" onclick="toggleSection(this)">
+                <div class="section-title">
                     <span>Individual Documents</span>
                 </div>
-                <div class="section-content {% if not individual_documents %}collapsed{% endif %}">
+                <div class="section-content">
             {% if individual_documents %}
                 {% for doc in individual_documents %}
                 <div class="document-card" data-selection-id="{{ doc.selection_id }}">
@@ -473,7 +397,7 @@
                     </div>
                     <input type="file" id="file-{{ doc.selection_id }}" class="file-input" 
                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" 
-                           onchange="uploadFile({{ doc.selection_id }}, this.files[0])">
+                           onchange="uploadFile('{{ doc.selection_id }}', this.files[0])">
                     <div class="uploaded-files" id="uploads-{{ doc.selection_id }}">
                         {% for upload in doc.uploads %}
                         <div class="uploaded-file" data-upload-id="{{ upload.id }}">
@@ -492,7 +416,7 @@
                             <div class="file-actions">
                                 <a href="{{ upload.file_url }}" target="_blank" class="btn btn-view">View</a>
                                 {% if not upload.accepted %}
-                                <button class="btn btn-delete" onclick="deleteUpload({{ upload.id }}, {{ doc.selection_id }})">Delete</button>
+                                <button class="btn btn-delete" onclick="deleteUpload('{{ upload.id }}', '{{ doc.selection_id }}')">Delete</button>
                                 {% endif %}
                             </div>
                         </div>
@@ -508,10 +432,10 @@
             </div>
 
             <div class="section">
-                <div class="section-title" onclick="toggleSection(this)">
+                <div class="section-title">
                     <span>Needs List Documents</span>
                 </div>
-                <div class="section-content {% if not needs_list_documents %}collapsed{% endif %}">
+                <div class="section-content">
             {% if needs_list_documents %}
                 {% for print_group_name, documents in needs_list_documents.items %}
                 <div class="print-group-container">
@@ -535,7 +459,7 @@
                     </div>
                     <input type="file" id="file-{{ doc.selection_id }}" class="file-input" 
                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" 
-                           onchange="uploadFile({{ doc.selection_id }}, this.files[0])">
+                           onchange="uploadFile('{{ doc.selection_id }}', this.files[0])">
                     <div class="uploaded-files" id="uploads-{{ doc.selection_id }}">
                         {% for upload in doc.uploads %}
                         <div class="uploaded-file" data-upload-id="{{ upload.id }}">
@@ -554,7 +478,7 @@
                             <div class="file-actions">
                                 <a href="{{ upload.file_url }}" target="_blank" class="btn btn-view">View</a>
                                 {% if not upload.accepted %}
-                                <button class="btn btn-delete" onclick="deleteUpload({{ upload.id }}, {{ doc.selection_id }})">Delete</button>
+                                <button class="btn btn-delete" onclick="deleteUpload('{{ upload.id }}', '{{ doc.selection_id }}')">Delete</button>
                                 {% endif %}
                             </div>
                         </div>
@@ -572,7 +496,7 @@
                 </div>
             </div>
 
-            {% if not adhoc_documents and not individual_documents and not needs_list_documents %}
+            {% if not individual_documents and not needs_list_documents %}
             <div class="empty-state">
                 No documents have been selected by the admin yet. Please wait for the admin to select documents.
             </div>
@@ -705,12 +629,6 @@
                 }
             });
         });
-
-        function toggleSection(element) {
-            const content = element.nextElementSibling;
-            element.classList.toggle('collapsed');
-            content.classList.toggle('collapsed');
-        }
 
         function togglePrintGroup(element) {
             const content = element.nextElementSibling;

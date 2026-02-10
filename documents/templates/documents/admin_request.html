@@ -66,7 +66,7 @@
         .sections-container {
             padding: 30px;
         }
-
+        
         .section {
             margin-bottom: 40px;
             border: 2px solid #e8f5e9;
@@ -286,44 +286,6 @@
         </div>
 
         <div class="sections-container">
-            <!-- AD HOC Section -->
-            <div class="section" id="adhoc-section">
-                <div class="section-header">
-                    <div class="section-title">AD HOC</div>
-                    <div class="section-status" id="adhoc-status">Not saved</div>
-                </div>
-                <div id="adhoc-alert"></div>
-                <div class="filters">
-                    <div class="filter-group">
-                        <label>Category</label>
-                        <select id="adhoc-category">
-                            <option value="">All</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Search</label>
-                        <input type="text" id="adhoc-search" placeholder="Search documents...">
-                    </div>
-                </div>
-                <div class="documents-container">
-                    <div class="documents-column">
-                        <div class="column-header">Available Documents</div>
-                        <div id="adhoc-available" class="documents-list">
-                            <div class="empty-state">Loading...</div>
-                        </div>
-                    </div>
-                    <div class="documents-column">
-                        <div class="column-header">Selected Documents</div>
-                        <div id="adhoc-selected" class="documents-list">
-                            <div class="empty-state">No documents selected</div>
-                        </div>
-                    </div>
-                </div>
-                <div style="margin-top: 16px; text-align: right;">
-                    <button class="btn btn-save" onclick="saveSection('adhoc')">Save AD HOC Selection</button>
-                </div>
-            </div>
-
             <!-- Individual Documents Section -->
             <div class="section" id="individual-section">
                 <div class="section-header">
@@ -410,7 +372,6 @@
         let selectedPrintGroup = null;
         
         const sectionData = {
-            adhoc: { selected: [], available: [] },
             individual: { selected: [], available: [] },
             needs_list: { selected: [], available: [] }
         };
@@ -432,8 +393,8 @@
                 allCategories = data.categories;
                 
                 // Populate category selects
-                ['adhoc', 'individual'].forEach(section => {
-                    const select = document.getElementById(`${section}-category`);
+                const select = document.getElementById('individual-category');
+                if (select) {
                     select.innerHTML = '<option value="">All</option>';
                     allCategories.forEach(cat => {
                         const option = document.createElement('option');
@@ -441,7 +402,7 @@
                         option.textContent = cat.name;
                         select.appendChild(option);
                     });
-                });
+                }
             } catch (error) {
                 console.error('Error loading categories:', error);
             }
@@ -502,10 +463,8 @@
         }
 
         function renderAllSections() {
-            ['adhoc', 'individual'].forEach(section => {
-                sectionData[section].available = allDocuments;
-                renderSection(section);
-            });
+            sectionData.individual.available = allDocuments;
+            renderSection('individual');
         }
 
         function renderSection(section) {
@@ -638,10 +597,8 @@
         }
 
         // Add event listeners for filters
-        ['adhoc', 'individual'].forEach(section => {
-            document.getElementById(`${section}-category`).addEventListener('change', () => renderSection(section));
-            document.getElementById(`${section}-search`).addEventListener('input', () => renderSection(section));
-        });
+        document.getElementById('individual-category').addEventListener('change', () => renderSection('individual'));
+        document.getElementById('individual-search').addEventListener('input', () => renderSection('individual'));
 
         document.getElementById('needs-list-search')?.addEventListener('input', () => renderSection('needs_list'));
 

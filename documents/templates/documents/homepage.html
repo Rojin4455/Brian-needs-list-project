@@ -74,7 +74,7 @@
 
         .options-container {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 30px;
             margin-top: 30px;
         }
@@ -217,20 +217,6 @@
         </div>
         
         <div class="options-container">
-            <div class="option-card" onclick="window.location.href='/{{ request_id }}/request/admin/adhoc/'">
-                <div class="option-icon icon-adhoc">
-                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="20" y="15" width="60" height="70" fill="#fff" stroke="#4caf50" stroke-width="2" rx="2"/>
-                        <circle cx="70" cy="25" r="8" fill="#4caf50"/>
-                        <path d="M 67 25 L 69 27 L 73 23" stroke="white" stroke-width="1.5" fill="none"/>
-                        <path d="M 30 50 L 70 50" stroke="#4caf50" stroke-width="2"/>
-                        <path d="M 30 60 L 60 60" stroke="#4caf50" stroke-width="2"/>
-                        <path d="M 45 50 L 50 45 M 50 45 L 55 50" stroke="#66bb6a" stroke-width="2" fill="none"/>
-                    </svg>
-                </div>
-                <div class="option-label">AD HOC</div>
-            </div>
-            
             <div class="option-card" onclick="window.location.href='/{{ request_id }}/request/admin/individual-documents/'">
                 <div class="option-icon icon-individual">
                     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -241,7 +227,6 @@
                 </div>
                 <div class="option-label">INDIVIDUAL DOCUMENT(S)</div>
             </div>
-            
             <div class="option-card" onclick="window.location.href='/{{ request_id }}/request/admin/needs-list/'">
                 <div class="option-icon icon-needs">
                     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">

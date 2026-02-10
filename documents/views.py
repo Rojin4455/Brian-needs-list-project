@@ -236,6 +236,9 @@ OPPORTUNITY_CARD_FIELD_LABELS = {
 
 logger = logging.getLogger(__name__)
 
+# GHL custom field ID for selected document names (comma-separated)
+GHL_SELECTED_DOCS_CUSTOM_FIELD_ID = "hRof1MYX2pbiwvT8O0I0"
+
 
 @csrf_exempt
 def opportunity_card_form(request, request_id):
@@ -1120,7 +1123,49 @@ def save_admin_selections(request, request_id):
                     'document_id': document.id,
                     'document_name': document.name,
                 })
-        
+
+        # After saving, update the configured GHL custom field with a
+        # comma-separated list of all selected document names for this request
+        # (individual + needs list). Failures here should not block the API.
+        try:
+            if GHL_SELECTED_DOCS_CUSTOM_FIELD_ID:
+                from .ghl_service import get_opportunity, update_contact_custom_field
+
+                # Collect all selected document names for this request
+                all_selections = AdminDocumentSelection.objects.filter(
+                    request=doc_request,
+                    section_type__in=['individual', 'needs_list'],
+                ).select_related('document').order_by('created_at')
+
+                names = []
+                seen = set()
+                for sel in all_selections:
+                    name = (sel.document.name or "").strip()
+                    if not name or name in seen:
+                        continue
+                    seen.add(name)
+                    names.append(name)
+
+                # Only hit GHL if we actually have at least one selected name
+                if names:
+                    doc_list_value = "\n".join([f"{i}. {name}" for i, name in enumerate(names, start=1)])
+                    opp_data = get_opportunity(request_id)
+                    opportunity = opp_data.get("opportunity") or {}
+                    contact_id = opportunity.get("contactId")
+                    if contact_id:
+                        update_contact_custom_field(
+                            contact_id,
+                            GHL_SELECTED_DOCS_CUSTOM_FIELD_ID,
+                            doc_list_value,
+                        )
+        except Exception as e:
+            logger.warning(
+                "Failed to update GHL custom field for request %s: %s",
+                request_id,
+                e,
+                exc_info=True,
+            )
+
         return JsonResponse({
             'success': True,
             'selections': selections,
