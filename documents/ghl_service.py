@@ -102,6 +102,30 @@ def get_opportunity(opportunity_id):
     return resp.json()
 
 
+def update_opportunity_custom_fields(opportunity_id, custom_fields):
+    """
+    Update one or more custom fields on a GHL opportunity.
+
+    PUT /opportunities/{opportunity_id}
+
+    :param opportunity_id: GHL opportunity ID
+    :param custom_fields: list of {"id": field_id, "field_value": value}
+    :return: dict from API (opportunity payload)
+    """
+    if not custom_fields:
+        return {}
+
+    headers = _auth_headers()
+    headers["Content-Type"] = "application/json"
+    url = f"{GHL_OPPORTUNITIES_BASE}/{opportunity_id}"
+    payload = {
+        "customFields": custom_fields,
+    }
+    resp = requests.put(url, headers=headers, json=payload, timeout=30)
+    resp.raise_for_status()
+    return resp.json() if resp.content else {}
+
+
 def create_contact_note(contact_id, body):
     """
     Create a note on a GHL contact.

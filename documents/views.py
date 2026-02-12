@@ -236,8 +236,11 @@ OPPORTUNITY_CARD_FIELD_LABELS = {
 
 logger = logging.getLogger(__name__)
 
-# GHL custom field ID for selected document names (comma-separated)
-GHL_SELECTED_DOCS_CUSTOM_FIELD_ID = "hRof1MYX2pbiwvT8O0I0"
+# GHL opportunity custom field IDs
+# "Needs List Items" (multiline list of document names)
+GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID = "ncvtisK7OT5CJMxipP2N"
+# "Needs List Url" (link sent to the user, based on request_id)
+GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID = "0FDWnJuZHsaSw8j0qxBv"
 
 
 @csrf_exempt
@@ -1124,40 +1127,56 @@ def save_admin_selections(request, request_id):
                     'document_name': document.name,
                 })
 
-        # After saving, update the configured GHL custom field with a
-        # comma-separated list of all selected document names for this request
+        # After saving, update the configured GHL opportunity custom fields with:
+        # 1) a numbered list of all selected document names for this request
+        # 2) the upload link URL we send to the user (based on request_id)
         # (individual + needs list). Failures here should not block the API.
         try:
-            if GHL_SELECTED_DOCS_CUSTOM_FIELD_ID:
-                from .ghl_service import get_opportunity, update_contact_custom_field
+            from .ghl_service import update_opportunity_custom_fields
 
-                # Collect all selected document names for this request
-                all_selections = AdminDocumentSelection.objects.filter(
-                    request=doc_request,
-                    section_type__in=['individual', 'needs_list'],
-                ).select_related('document').order_by('created_at')
+            # Collect all selected document names for this request
+            all_selections = AdminDocumentSelection.objects.filter(
+                request=doc_request,
+                section_type__in=['individual', 'needs_list'],
+            ).select_related('document').order_by('created_at')
 
-                names = []
-                seen = set()
-                for sel in all_selections:
-                    name = (sel.document.name or "").strip()
-                    if not name or name in seen:
-                        continue
-                    seen.add(name)
-                    names.append(name)
+            names = []
+            seen = set()
+            for sel in all_selections:
+                name = (sel.document.name or "").strip()
+                if not name or name in seen:
+                    continue
+                seen.add(name)
+                names.append(name)
 
-                # Only hit GHL if we actually have at least one selected name
-                if names:
-                    doc_list_value = "\n".join([f"{i}. {name}" for i, name in enumerate(names, start=1)])
-                    opp_data = get_opportunity(request_id)
-                    opportunity = opp_data.get("opportunity") or {}
-                    contact_id = opportunity.get("contactId")
-                    if contact_id:
-                        update_contact_custom_field(
-                            contact_id,
-                            GHL_SELECTED_DOCS_CUSTOM_FIELD_ID,
-                            doc_list_value,
-                        )
+            custom_fields = []
+
+            # Needs List Items – only if we have at least one name
+            if names and GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID:
+                doc_list_value = "\n".join(
+                    [f"{i}. {name}" for i, name in enumerate(names, start=1)]
+                )
+                custom_fields.append(
+                    {
+                        "id": GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID,
+                        "field_value": doc_list_value,
+                    }
+                )
+
+            # Needs List Url – always send if we have a field ID configured
+            if GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID:
+                # Example: https://docs.bestrentalpropertyloansusa.com/{request_id}/upload/
+                upload_url = f"https://docs.bestrentalpropertyloansusa.com/{request_id}/upload/"
+                custom_fields.append(
+                    {
+                        "id": GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID,
+                        "field_value": upload_url,
+                    }
+                )
+
+            if custom_fields:
+                # request_id here is the GHL opportunity ID in your URLs
+                update_opportunity_custom_fields(request_id, custom_fields)
         except Exception as e:
             logger.warning(
                 "Failed to update GHL custom field for request %s: %s",
