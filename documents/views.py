@@ -1132,7 +1132,12 @@ def save_admin_selections(request, request_id):
         # 2) the upload link URL we send to the user (based on request_id)
         # (individual + needs list). Failures here should not block the API.
         try:
-            from .ghl_service import update_opportunity_custom_fields
+            from .ghl_service import (
+                get_opportunity,
+                create_contact_note,
+                update_contact_note,
+                update_opportunity_custom_fields,
+            )
 
             # Collect all selected document names for this request
             all_selections = AdminDocumentSelection.objects.filter(
@@ -1150,6 +1155,7 @@ def save_admin_selections(request, request_id):
                 names.append(name)
 
             custom_fields = []
+            upload_url = f"https://docs.bestrentalpropertyloansusa.com/{request_id}/upload/"
 
             # Needs List Items – only if we have at least one name
             if names and GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID:
@@ -1165,8 +1171,6 @@ def save_admin_selections(request, request_id):
 
             # Needs List Url – always send if we have a field ID configured
             if GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID:
-                # Example: https://docs.bestrentalpropertyloansusa.com/{request_id}/upload/
-                upload_url = f"https://docs.bestrentalpropertyloansusa.com/{request_id}/upload/"
                 custom_fields.append(
                     {
                         "id": GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID,
@@ -1177,6 +1181,42 @@ def save_admin_selections(request, request_id):
             if custom_fields:
                 # request_id here is the GHL opportunity ID in your URLs
                 update_opportunity_custom_fields(request_id, custom_fields)
+
+            # Create or update GHL contact note with the same needs list data
+            # (document list + upload link). Use saved note ID to update on subsequent changes.
+            note_parts = []
+            if names:
+                doc_list_value = "\n".join(
+                    [f"{i}. {name}" for i, name in enumerate(names, start=1)]
+                )
+                note_parts.append("Needs List\n\n" + doc_list_value)
+            note_parts.append("Upload link: " + upload_url)
+            note_body = "\n\n".join(note_parts)
+
+            try:
+                opp_data = get_opportunity(request_id)
+                opportunity = opp_data.get("opportunity") or {}
+                contact_id = opportunity.get("contactId")
+                if contact_id:
+                    if doc_request.ghl_needs_list_note_id:
+                        update_contact_note(
+                            contact_id,
+                            doc_request.ghl_needs_list_note_id,
+                            note_body,
+                        )
+                    else:
+                        result = create_contact_note(contact_id, note_body)
+                        note_id = (result.get("note") or {}).get("id") or result.get("id")
+                        if note_id:
+                            doc_request.ghl_needs_list_note_id = note_id
+                            doc_request.save(update_fields=["ghl_needs_list_note_id"])
+            except Exception as note_err:
+                logger.warning(
+                    "Failed to create/update GHL needs list note for request %s: %s",
+                    request_id,
+                    note_err,
+                    exc_info=True,
+                )
         except Exception as e:
             logger.warning(
                 "Failed to update GHL custom field for request %s: %s",

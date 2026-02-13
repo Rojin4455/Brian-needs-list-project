@@ -113,6 +113,12 @@ class DocumentRequest(models.Model):
     request_id = models.CharField(max_length=255, unique=True, help_text="Unique identifier from URL (e.g., gfgwgvffrffgggrg)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    ghl_needs_list_note_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="GHL contact note ID for the needs list; when set, we update this note on subsequent changes instead of creating a new one",
+    )
 
     class Meta:
         ordering = ['-created_at']
