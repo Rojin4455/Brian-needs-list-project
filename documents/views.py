@@ -16,6 +16,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib import colors
 from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload, OpportunityCardSubmission
+from .ghl_credentials import extract_location_id, get_ghl_api_context
 
 
 @require_http_methods(["GET"])
@@ -65,6 +66,7 @@ def create_category(request):
         doc_request = None
         if request_id:
             doc_request, _ = DocumentRequest.objects.get_or_create(request_id=request_id)
+            _link_doc_request_to_location(request, doc_request, json_body=data)
             # For request-scoped categories, only check uniqueness within this request
             if Category.objects.filter(name=name, request=doc_request).exists():
                 return JsonResponse({'error': 'A category with this name already exists for this request'}, status=400)
@@ -236,11 +238,99 @@ OPPORTUNITY_CARD_FIELD_LABELS = {
 
 logger = logging.getLogger(__name__)
 
-# GHL opportunity custom field IDs
-# "Needs List Items" (multiline list of document names)
+# Fallback GHL opportunity custom field IDs when no GHLCustomField row exists for the account
+# (Prefer rows on GHLCustomField with field_name "Needs List Items" / "Needs List Url".)
 GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID = "ncvtisK7OT5CJMxipP2N"
-# "Needs List Url" (link sent to the user, based on request_id)
 GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID = "0FDWnJuZHsaSw8j0qxBv"
+
+
+def _ghl_token_kwargs(request, json_body=None, doc_request=None):
+    ctx = _resolve_ghl_context(request, json_body=json_body, doc_request=doc_request)
+    if not ctx:
+        return {}
+    return {"access_token": ctx["access_token"]}
+
+
+def _ghl_upload_kwargs(request, json_body=None, doc_request=None):
+    ctx = _resolve_ghl_context(request, json_body=json_body, doc_request=doc_request)
+    if not ctx:
+        return {}
+    # parent_id in context is GHLAuthCredentials.parent_id, else location_id (see ghl_credentials).
+    kw = {"access_token": ctx["access_token"]}
+    if ctx.get("parent_id"):
+        kw["parent_id"] = ctx["parent_id"]
+    return kw
+
+
+def _ghl_media_delete_kwargs(request, json_body=None, doc_request=None):
+    ctx = _resolve_ghl_context(request, json_body=json_body, doc_request=doc_request)
+    if not ctx:
+        return {}
+    return {
+        "access_token": ctx["access_token"],
+        "alt_type": ctx["alt_type"],
+        "alt_id": ctx["alt_id"],
+    }
+
+
+def _context_from_credentials(creds):
+    if not creds or not (creds.access_token or "").strip():
+        return None
+    return {
+        "access_token": creds.access_token.strip(),
+        "parent_id": (creds.parent_id or "").strip() or (creds.location_id or "").strip() or None,
+        "alt_type": (creds.alt_type or "location").strip() or "location",
+        "alt_id": (creds.alt_id or "").strip() or (creds.location_id or "").strip() or None,
+        "credentials": creds,
+    }
+
+
+def _resolve_ghl_context(request, json_body=None, doc_request=None):
+    ctx = get_ghl_api_context(extract_location_id(request, json_body))
+    if ctx:
+        return ctx
+    if doc_request and getattr(doc_request, "ghl_account", None):
+        return _context_from_credentials(doc_request.ghl_account)
+    return None
+
+
+def _link_doc_request_to_location(request, doc_request, json_body=None):
+    location_id = extract_location_id(request, json_body)
+    if not location_id or not doc_request:
+        return
+    from accounts.models import GHLAuthCredentials
+
+    creds = GHLAuthCredentials.objects.filter(location_id=location_id).first()
+    if creds and doc_request.ghl_account_id != creds.id:
+        doc_request.ghl_account = creds
+        doc_request.save(update_fields=["ghl_account"])
+
+
+def _resolve_needs_list_opportunity_field_ids(ctx):
+    """
+    Resolve opportunity custom field IDs from GHLCustomField for this GHLAuthCredentials
+    (matched by field_name). Falls back to module constants if rows are missing.
+    """
+    if not ctx or not ctx.get("credentials"):
+        return GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID, GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID
+
+    from accounts.models import GHLCustomField
+
+    creds = ctx["credentials"]
+    items_cf = GHLCustomField.objects.filter(
+        account=creds,
+        field_name="Needs List Items",
+        is_active=True,
+    ).first()
+    url_cf = GHLCustomField.objects.filter(
+        account=creds,
+        field_name="Needs List Url",
+        is_active=True,
+    ).first()
+    return (
+        (items_cf.ghl_field_id if items_cf else None) or GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID,
+        (url_cf.ghl_field_id if url_cf else None) or GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID,
+    )
 
 
 @csrf_exempt
@@ -267,7 +357,8 @@ def opportunity_card_form(request, request_id):
         if not submission.ghl_note_id:
             try:
                 from .ghl_service import get_opportunity, create_contact_note
-                opp_data = get_opportunity(request_id)
+                ghl_kw = _ghl_token_kwargs(request)
+                opp_data = get_opportunity(request_id, **ghl_kw)
                 opportunity = opp_data.get("opportunity") or {}
                 contact_id = opportunity.get("contactId")
                 if contact_id:
@@ -276,7 +367,7 @@ def opportunity_card_form(request, request_id):
                         reverse("opportunity-submission-view", kwargs={"request_id": request_id})
                     )
                     note_body = f"Registration Form - {submitted_date} - {view_url}"
-                    result = create_contact_note(contact_id, note_body)
+                    result = create_contact_note(contact_id, note_body, **ghl_kw)
                     note_id = (result.get("note") or {}).get("id") or result.get("id")
                     if note_id:
                         submission.ghl_note_id = note_id
@@ -288,6 +379,7 @@ def opportunity_card_form(request, request_id):
             'success': True,
             'message': 'Registration submitted successfully.' if created else 'Registration updated successfully.',
             'initial': submission.form_data or {},
+            'location_id': extract_location_id(request) or '',
         }
         return render(request, 'documents/opportunity_card_form.html', context)
 
@@ -303,6 +395,7 @@ def opportunity_card_form(request, request_id):
         'request_id': request_id,
         'initial': initial,
         'success': False,
+        'location_id': extract_location_id(request) or '',
     }
     return render(request, 'documents/opportunity_card_form.html', context)
 
@@ -397,6 +490,7 @@ def homepage(request, request_id):
     """
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+    _link_doc_request_to_location(request, doc_request)
     
     context = {
         'request_id': request_id,
@@ -412,6 +506,7 @@ def admin_user_uploads_view(request, request_id):
     """
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
     except DocumentRequest.DoesNotExist:
         return render(request, 'documents/request_not_found.html', {'request_id': request_id})
     adhoc_docs, individual_docs, needs_list_docs = _build_request_document_data(doc_request)
@@ -474,6 +569,7 @@ def download_request_pdf(request, request_id):
     """
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
     except DocumentRequest.DoesNotExist:
         raise Http404("Request not found")
 
@@ -543,6 +639,7 @@ def adhoc_page(request, request_id):
     """
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+    _link_doc_request_to_location(request, doc_request)
     
     # Load existing custom documents for adhoc section
     existing_selections = AdminDocumentSelection.objects.filter(
@@ -580,6 +677,7 @@ def individual_documents_page(request, request_id):
     """
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+    _link_doc_request_to_location(request, doc_request)
     
     # Load existing selections for individual section
     existing_selections = AdminDocumentSelection.objects.filter(
@@ -620,6 +718,7 @@ def needs_list_page(request, request_id):
     """
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+    _link_doc_request_to_location(request, doc_request)
     
     # Load existing selections for needs_list section
     existing_selections = AdminDocumentSelection.objects.filter(
@@ -763,6 +862,7 @@ def admin_request_page(request, request_id):
     """
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
+    _link_doc_request_to_location(request, doc_request)
     
     context = {
         'request_id': request_id,
@@ -778,6 +878,7 @@ def user_upload_page(request, request_id):
     """
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
     except DocumentRequest.DoesNotExist:
         return render(request, 'documents/request_not_found.html', {'request_id': request_id, 'is_user_facing': True})
     adhoc_docs, individual_docs, needs_list_docs = _build_request_document_data(doc_request)
@@ -803,6 +904,7 @@ def create_adhoc_document(request, request_id):
         doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
         
         data = json.loads(request.body)
+        _link_doc_request_to_location(request, doc_request, json_body=data)
         name = data.get('name')
         description = data.get('description')
         category_id = data.get('category_id')
@@ -863,6 +965,7 @@ def create_individual_document(request, request_id):
         doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
         
         data = json.loads(request.body)
+        _link_doc_request_to_location(request, doc_request, json_body=data)
         name = data.get('name')
         description = data.get('description')
         category_id = data.get('category_id')
@@ -923,6 +1026,7 @@ def create_needs_list_print_group(request, request_id):
         doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
         
         data = json.loads(request.body)
+        _link_doc_request_to_location(request, doc_request, json_body=data)
         name = data.get('name')
         description = data.get('description', '')
         
@@ -964,6 +1068,7 @@ def create_needs_list_document(request, request_id):
         doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
         
         data = json.loads(request.body)
+        _link_doc_request_to_location(request, doc_request, json_body=data)
         name = data.get('name')
         description = data.get('description')
         category_id = data.get('category_id')
@@ -1035,6 +1140,7 @@ def delete_adhoc_document(request, request_id, selection_id):
     try:
         # Verify request exists
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
         
         # Get the admin selection
         selection = get_object_or_404(
@@ -1079,6 +1185,10 @@ def save_admin_selections(request, request_id):
         doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
         
         data = json.loads(request.body)
+        _link_doc_request_to_location(request, doc_request, json_body=data)
+        ghl_ctx = _resolve_ghl_context(request, json_body=data, doc_request=doc_request)
+        ghl_kw = {"access_token": ghl_ctx["access_token"]} if ghl_ctx else {}
+        items_field_id, url_field_id = _resolve_needs_list_opportunity_field_ids(ghl_ctx)
         section_type = data.get('section_type')
         document_ids = data.get('document_ids', [])
         print_group_id = data.get('print_group_id', None)
@@ -1105,22 +1215,38 @@ def save_admin_selections(request, request_id):
             except PrintGroup.DoesNotExist:
                 return JsonResponse({'error': 'Print group not found'}, status=404)
         
-        # Delete existing selections for this section type and request
-        AdminDocumentSelection.objects.filter(
-            request=doc_request,
-            section_type=section_type
-        ).delete()
-        
-        # Create new selections
+        # Preserve existing selection rows when possible so previously uploaded files
+        # stay linked. Only delete rows that are no longer selected.
         selections = []
+        document_by_id = {doc.id: doc for doc in documents}
+        target_ids = set(document_ids)
         with transaction.atomic():
-            for document in documents:
-                selection = AdminDocumentSelection.objects.create(
-                    request=doc_request,
-                    section_type=section_type,
-                    document=document,
-                    print_group=print_group
-                )
+            existing_qs = AdminDocumentSelection.objects.filter(
+                request=doc_request,
+                section_type=section_type,
+            )
+            # Needs-list selections are scoped per print_group.
+            if section_type == "needs_list":
+                existing_qs = existing_qs.filter(print_group=print_group)
+
+            existing_by_doc_id = {sel.document_id: sel for sel in existing_qs}
+
+            # Remove deselected documents for this scope.
+            existing_qs.exclude(document_id__in=target_ids).delete()
+
+            # Reuse existing row if present; otherwise create.
+            for doc_id in document_ids:
+                document = document_by_id.get(doc_id)
+                if not document:
+                    continue
+                selection = existing_by_doc_id.get(doc_id)
+                if not selection:
+                    selection = AdminDocumentSelection.objects.create(
+                        request=doc_request,
+                        section_type=section_type,
+                        document=document,
+                        print_group=print_group,
+                    )
                 selections.append({
                     'id': selection.id,
                     'document_id': document.id,
@@ -1158,29 +1284,29 @@ def save_admin_selections(request, request_id):
             upload_url = f"https://docs.bestrentalpropertyloansusa.com/{request_id}/upload/"
 
             # Needs List Items – only if we have at least one name
-            if names and GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID:
+            if names and items_field_id:
                 doc_list_value = "\n".join(
                     [f"{i}. {name}" for i, name in enumerate(names, start=1)]
                 )
                 custom_fields.append(
                     {
-                        "id": GHL_OPPORTUNITY_NEEDS_LIST_ITEMS_FIELD_ID,
+                        "id": items_field_id,
                         "field_value": doc_list_value,
                     }
                 )
 
             # Needs List Url – always send if we have a field ID configured
-            if GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID:
+            if url_field_id:
                 custom_fields.append(
                     {
-                        "id": GHL_OPPORTUNITY_NEEDS_LIST_URL_FIELD_ID,
+                        "id": url_field_id,
                         "field_value": upload_url,
                     }
                 )
 
             if custom_fields:
                 # request_id here is the GHL opportunity ID in your URLs
-                update_opportunity_custom_fields(request_id, custom_fields)
+                update_opportunity_custom_fields(request_id, custom_fields, **ghl_kw)
 
             # Create or update GHL contact note with the same needs list data
             # (document list + upload link). Use saved note ID to update on subsequent changes.
@@ -1194,7 +1320,7 @@ def save_admin_selections(request, request_id):
             note_body = "\n\n".join(note_parts)
 
             try:
-                opp_data = get_opportunity(request_id)
+                opp_data = get_opportunity(request_id, **ghl_kw)
                 opportunity = opp_data.get("opportunity") or {}
                 contact_id = opportunity.get("contactId")
                 if contact_id:
@@ -1203,9 +1329,10 @@ def save_admin_selections(request, request_id):
                             contact_id,
                             doc_request.ghl_needs_list_note_id,
                             note_body,
+                            **ghl_kw,
                         )
                     else:
-                        result = create_contact_note(contact_id, note_body)
+                        result = create_contact_note(contact_id, note_body, **ghl_kw)
                         note_id = (result.get("note") or {}).get("id") or result.get("id")
                         if note_id:
                             doc_request.ghl_needs_list_note_id = note_id
@@ -1250,6 +1377,7 @@ def upload_user_file(request, request_id, selection_id):
         from .ghl_service import upload_file as ghl_upload_file
 
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
         selection = get_object_or_404(AdminDocumentSelection, id=selection_id, request=doc_request)
 
         if 'file' not in request.FILES:
@@ -1259,7 +1387,7 @@ def upload_user_file(request, request_id, selection_id):
         name = file.name or selection.document.name or 'document'
 
         # Upload to GHL; do not save file on server
-        result = ghl_upload_file(file, name=name)
+        result = ghl_upload_file(file, name=name, **_ghl_upload_kwargs(request, doc_request=doc_request))
 
         upload = UserDocumentUpload.objects.create(
             admin_selection=selection,
@@ -1303,6 +1431,7 @@ def delete_user_upload(request, request_id, upload_id):
         from .ghl_service import delete_media as ghl_delete_media
 
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
         upload = get_object_or_404(
             UserDocumentUpload,
             id=upload_id,
@@ -1316,13 +1445,20 @@ def delete_user_upload(request, request_id, upload_id):
             }, status=403)
 
         if upload.ghl_file_id:
-            alt_type = getattr(settings, 'GHL_ALT_TYPE', 'location')
-            alt_id = getattr(settings, 'GHL_ALT_ID', '') or None
-            if alt_id:
+            del_kw = _ghl_media_delete_kwargs(request, doc_request=doc_request)
+            if del_kw.get("alt_id"):
                 try:
-                    ghl_delete_media(upload.ghl_file_id, alt_type=alt_type, alt_id=alt_id)
+                    ghl_delete_media(upload.ghl_file_id, **del_kw)
                 except Exception:
                     pass  # still delete our record if GHL delete fails
+            else:
+                alt_type = getattr(settings, 'GHL_ALT_TYPE', 'location')
+                alt_id = getattr(settings, 'GHL_ALT_ID', '') or None
+                if alt_id:
+                    try:
+                        ghl_delete_media(upload.ghl_file_id, alt_type=alt_type, alt_id=alt_id)
+                    except Exception:
+                        pass  # still delete our record if GHL delete fails
 
         deleted_id = upload.id
         upload.delete()
@@ -1350,6 +1486,7 @@ def accept_user_upload(request, request_id, upload_id):
     try:
         # Verify request exists
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
         
         # Get the upload
         upload = get_object_or_404(
@@ -1393,6 +1530,7 @@ def user_documents_view(request, request_id):
     """
     try:
         doc_request = DocumentRequest.objects.get(request_id=request_id)
+        _link_doc_request_to_location(request, doc_request)
     except DocumentRequest.DoesNotExist:
         return render(request, 'documents/request_not_found.html', {'request_id': request_id, 'is_user_facing': True})
     

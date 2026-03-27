@@ -111,6 +111,14 @@ class DocumentRequest(models.Model):
     Represents a document request session identified by a unique request ID from the URL.
     """
     request_id = models.CharField(max_length=255, unique=True, help_text="Unique identifier from URL (e.g., gfgwgvffrffgggrg)")
+    ghl_account = models.ForeignKey(
+        'accounts.GHLAuthCredentials',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='document_requests',
+        help_text="Linked GHL account for this request (resolved by location_id).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     ghl_needs_list_note_id = models.CharField(

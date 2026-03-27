@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request Documents</title>
@@ -205,6 +206,7 @@
             }
         }
     </style>
+    <script src="{% static 'documents/ghl_location.js' %}"></script>
 </head>
 <body>
     <div class="container">
@@ -217,7 +219,7 @@
         </div>
         
         <div class="options-container">
-            <div class="option-card" onclick="window.location.href='/{{ request_id }}/request/admin/individual-documents/'">
+            <div class="option-card" onclick="window.location.href=preserveQueryHref('/{{ request_id }}/request/admin/individual-documents/')">
                 <div class="option-icon icon-individual">
                     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                         <rect x="20" y="20" width="60" height="60" fill="#fff" stroke="#4caf50" stroke-width="2" rx="2"/>
@@ -227,7 +229,7 @@
                 </div>
                 <div class="option-label">INDIVIDUAL DOCUMENT(S)</div>
             </div>
-            <div class="option-card" onclick="window.location.href='/{{ request_id }}/request/admin/needs-list/'">
+            <div class="option-card" onclick="window.location.href=preserveQueryHref('/{{ request_id }}/request/admin/needs-list/')">
                 <div class="option-icon icon-needs">
                     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                         <rect x="20" y="15" width="60" height="20" fill="#fff" stroke="#4caf50" stroke-width="2" rx="2"/>

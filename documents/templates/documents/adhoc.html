@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request Documents - AD HOC</title>
@@ -271,7 +272,7 @@
                 <h1>Request Documents</h1>
                 <div class="subtitle">Request a custom document</div>
             </div>
-            <button class="close-btn" onclick="window.location.href='/{{ request_id }}/request/admin/'">×</button>
+            <button type="button" class="close-btn" onclick="window.location.href=preserveQueryHref('/{{ request_id }}/request/admin/')">×</button>
         </div>
         
         <div class="modal-body">
@@ -343,11 +344,12 @@
         </div>
         
         <div class="modal-footer">
-            <button class="btn btn-back" onclick="window.location.href='/{{ request_id }}/request/admin/'">Back</button>
+            <button type="button" class="btn btn-back" onclick="window.location.href=preserveQueryHref('/{{ request_id }}/request/admin/')">Back</button>
             <button class="btn btn-send" onclick="submitForm()">Send Request</button>
         </div>
     </div>
 
+    <script src="{% static 'documents/ghl_location.js' %}"></script>
     <script>
         const requestId = '{{ request_id }}';
 
@@ -393,12 +395,12 @@
             
             setButtonLoading(submitBtn, true);
             try {
-                const response = await fetch('/api/categories/create/', {
+                const response = await fetch(withLocationQuery('/api/categories/create/'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ ...formData, request_id: requestId })
+                    body: JSON.stringify(withLocationJsonBody({ ...formData, request_id: requestId }))
                 });
                 
                 const result = await response.json();
@@ -457,12 +459,12 @@
 
             setButtonLoading(sendBtn, true);
             try {
-                const response = await fetch(`/api/${requestId}/admin/adhoc/create/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/admin/adhoc/create/`), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(withLocationJsonBody(payload))
                 });
 
                 const result = await response.json();
@@ -491,7 +493,7 @@
             }
 
             try {
-                const response = await fetch(`/api/${requestId}/admin/adhoc/${selectionId}/delete/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/admin/adhoc/${selectionId}/delete/`), {
                     method: 'DELETE'
                 });
 

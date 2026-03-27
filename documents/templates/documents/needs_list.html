@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request Documents - Needs List</title>
@@ -248,7 +249,7 @@
                 <h1>Request Documents</h1>
                 <div class="subtitle">Request needs list</div>
             </div>
-            <button class="close-btn" onclick="window.location.href='/{{ request_id }}/request/admin/'">×</button>
+            <button type="button" class="close-btn" onclick="window.location.href=preserveQueryHref('/{{ request_id }}/request/admin/')">×</button>
         </div>
         
         <div class="modal-body">
@@ -322,7 +323,7 @@
         </div>
         
         <div class="modal-footer">
-            <button class="btn btn-back" onclick="window.location.href='/{{ request_id }}/request/admin/'">Back</button>
+            <button type="button" class="btn btn-back" onclick="window.location.href=preserveQueryHref('/{{ request_id }}/request/admin/')">Back</button>
             <button class="btn btn-send" onclick="sendRequest()">Send Request</button>
         </div>
     </div>
@@ -350,6 +351,7 @@
             border: 1px solid #f5c6cb;
         }
     </style>
+    <script src="{% static 'documents/ghl_location.js' %}"></script>
     <script>
         const requestId = '{{ request_id }}';
         let printGroups = [];
@@ -374,7 +376,7 @@
 
         async function loadPrintGroups() {
             try {
-                const response = await fetch(`/api/print-groups/?request_id=${requestId}`);
+                const response = await fetch(withLocationQuery(`/api/print-groups/?request_id=${requestId}`));
                 const data = await response.json();
                 printGroups = data.print_groups;
                 renderPrintGroups();
@@ -414,7 +416,7 @@
             document.getElementById('custom-document-print-group-id').value = printGroupId;
             
             try {
-                const response = await fetch(`/api/documents/?request_id=${requestId}&print_group_id=${printGroupId}`);
+                const response = await fetch(withLocationQuery(`/api/documents/?request_id=${requestId}&print_group_id=${printGroupId}`));
                 const data = await response.json();
                 documents = data.documents;
                 
@@ -516,12 +518,12 @@
             };
 
             try {
-                const response = await fetch(`/api/${requestId}/admin/selections/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/admin/selections/`), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(withLocationJsonBody(payload))
                 });
 
                 const result = await response.json();
@@ -529,7 +531,7 @@
                 if (response.ok) {
                     showAlert(`Successfully saved ${result.count} document(s)!`, 'success');
                     setTimeout(() => {
-                        window.location.href = `/${requestId}/request/admin/`;
+                        window.location.href = preserveQueryHref(`/${requestId}/request/admin/`);
                     }, 2000);
                 } else {
                     showAlert(result.error || 'Error saving selections', 'error');
@@ -567,12 +569,12 @@
             
             setButtonLoading(submitBtn, true);
             try {
-                const response = await fetch(`/api/${requestId}/admin/needs-list/document/create/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/admin/needs-list/document/create/`), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify(withLocationJsonBody(formData))
                 });
                 
                 const result = await response.json();

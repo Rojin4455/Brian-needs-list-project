@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from decouple import config
-from csp.constants import SELF, UNSAFE_INLINE
+# from csp.constants import SELF, UNSAFE_INLINE
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,7 +28,7 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = True
 
 # Also ensure your IP is in ALLOWED_HOSTS
-ALLOWED_HOSTS = ['3.106.189.174', 'localhost', '127.0.0.1','docs.bestrentalpropertyloansusa.com']
+ALLOWED_HOSTS = ['3.106.189.174', 'localhost', '127.0.0.1','docs.bestrentalpropertyloansusa.com', '2719-2401-4900-8fdc-89a9-d88-b855-9ea4-ace7.ngrok-free.app']
 
 # Allow CSRF when form is embedded in iframe on these origins (e.g. GoHighLevel)
 CSRF_TRUSTED_ORIGINS = [
@@ -38,6 +38,14 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Application definition
 
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -45,8 +53,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_celery_beat',
     'documents',
     'csp',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -63,14 +73,14 @@ MIDDLEWARE = [
 
 # django-csp 4.x format (see https://django-csp.readthedocs.io/en/latest/migration-guide.html)
 # Allow inline styles/scripts and external logo so admin homepage and iframe embedding work
-CONTENT_SECURITY_POLICY = {
-    "DIRECTIVES": {
-        "frame-ancestors": ("*",),
-        "img-src": [SELF, "https://storage.googleapis.com"],
-        "style-src": [SELF, UNSAFE_INLINE],
-        "script-src": [SELF, UNSAFE_INLINE],
-    }
-}
+# CONTENT_SECURITY_POLICY = {
+#     "DIRECTIVES": {
+#         "frame-ancestors": ("*",),
+#         "img-src": [SELF, "https://storage.googleapis.com"],
+#         "style-src": [SELF, UNSAFE_INLINE],
+#         "script-src": [SELF, UNSAFE_INLINE],
+#     }
+# }
 
 
 ROOT_URLCONF = 'backend.urls'
@@ -163,3 +173,13 @@ GHL_ACCESS_TOKEN = config('GHL_ACCESS_TOKEN', default='')
 GHL_PARENT_ID = config('GHL_PARENT_ID', default='')  # parentId for upload-file
 GHL_ALT_TYPE = config('GHL_ALT_TYPE', default='location')  # for update/delete (e.g. location)
 GHL_ALT_ID = config('GHL_ALT_ID', default='')  # for update/delete (e.g. location/company id)
+
+
+from datetime import timedelta
+
+CELERY_BEAT_SCHEDULE = {
+    'make-api-call-every-minute': {
+        'task': 'accounts.tasks.make_api_call',
+        'schedule': timedelta(hours=10),# every 10 hours
+    },
+}

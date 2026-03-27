@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Request Documents</title>
@@ -364,6 +365,7 @@
         </div>
     </div>
 
+    <script src="{% static 'documents/ghl_location.js' %}"></script>
     <script>
         const requestId = '{{ request_id }}';
         let allDocuments = [];
@@ -388,7 +390,7 @@
 
         async function loadCategories() {
             try {
-                const response = await fetch(`/api/categories/?request_id=${requestId}`);
+                const response = await fetch(withLocationQuery(`/api/categories/?request_id=${requestId}`));
                 const data = await response.json();
                 allCategories = data.categories;
                 
@@ -410,7 +412,7 @@
 
         async function loadDocuments() {
             try {
-                const response = await fetch(`/api/documents/?request_id=${requestId}`);
+                const response = await fetch(withLocationQuery(`/api/documents/?request_id=${requestId}`));
                 const data = await response.json();
                 allDocuments = data.documents;
             } catch (error) {
@@ -420,7 +422,7 @@
 
         async function loadPrintGroups() {
             try {
-                const response = await fetch(`/api/print-groups/?request_id=${requestId}`);
+                const response = await fetch(withLocationQuery(`/api/print-groups/?request_id=${requestId}`));
                 const data = await response.json();
                 allPrintGroups = data.print_groups;
                 renderPrintGroups();
@@ -447,7 +449,7 @@
         async function selectPrintGroup(printGroupId) {
             selectedPrintGroup = printGroupId;
             try {
-                const response = await fetch(`/api/documents/?request_id=${requestId}&print_group_id=${printGroupId}`);
+                const response = await fetch(withLocationQuery(`/api/documents/?request_id=${requestId}&print_group_id=${printGroupId}`));
                 const data = await response.json();
                 sectionData.needs_list.available = data.documents;
                 sectionData.needs_list.selected = [];
@@ -563,12 +565,12 @@
             }
 
             try {
-                const response = await fetch(`/api/${requestId}/admin/selections/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/admin/selections/`), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(withLocationJsonBody(payload))
                 });
 
                 const result = await response.json();

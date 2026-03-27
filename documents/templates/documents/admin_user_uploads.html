@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - User Uploads</title>
@@ -569,7 +570,24 @@
         </div>
     </div>
 
+    <script src="{% static 'documents/ghl_location.js' %}"></script>
     <script>
+        // Safety fallback in case static helper fails to load.
+        if (typeof withLocationQuery !== 'function') {
+            window.withLocationQuery = function(url) {
+                const id = new URLSearchParams(window.location.search).get('location_id');
+                if (!id) return url;
+                return url + (url.includes('?') ? '&' : '?') + 'location_id=' + encodeURIComponent(id);
+            };
+        }
+        if (typeof withLocationJsonBody !== 'function') {
+            window.withLocationJsonBody = function(obj) {
+                const id = new URLSearchParams(window.location.search).get('location_id');
+                if (!id || !obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+                return { ...obj, location_id: id };
+            };
+        }
+
         const requestId = '{{ request_id }}';
 
         function showAlert(message, type = 'success') {
@@ -597,12 +615,12 @@
         async function toggleAccept(uploadId, accepted, btn) {
             setButtonLoading(btn, true);
             try {
-                const response = await fetch(`/api/${requestId}/admin/upload/${uploadId}/accept/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/admin/upload/${uploadId}/accept/`), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ accepted: accepted })
+                    body: JSON.stringify(withLocationJsonBody({ accepted: accepted }))
                 });
 
                 const result = await response.json();

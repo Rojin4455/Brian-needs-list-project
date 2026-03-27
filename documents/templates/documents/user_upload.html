@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upload Documents</title>
@@ -504,6 +505,7 @@
         </div>
     </div>
 
+    <script src="{% static 'documents/ghl_location.js' %}"></script>
     <script>
         const requestId = '{{ request_id }}';
 
@@ -532,7 +534,7 @@
             uploadsContainer.insertAdjacentHTML('beforeend', loadingHtml);
 
             try {
-                const response = await fetch(`/api/${requestId}/upload/${selectionId}/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/upload/${selectionId}/`), {
                     method: 'POST',
                     body: formData
                 });
@@ -582,7 +584,7 @@
             }
 
             try {
-                const response = await fetch(`/api/${requestId}/upload/${uploadId}/delete/`, {
+                const response = await fetch(withLocationQuery(`/api/${requestId}/upload/${uploadId}/delete/`), {
                     method: 'DELETE'
                 });
 
