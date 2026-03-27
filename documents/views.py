@@ -1315,7 +1315,8 @@ def save_admin_selections(request, request_id):
                 doc_list_value = "\n".join(
                     [f"{i}. {name}" for i, name in enumerate(names, start=1)]
                 )
-                note_parts.append("Needs List\n\n" + doc_list_value)
+                # note_parts.append("Needs List\n\n" + doc_list_value)
+                note_parts.append(doc_list_value)
             note_parts.append("Upload link: " + upload_url)
             note_body = "\n\n".join(note_parts)
 

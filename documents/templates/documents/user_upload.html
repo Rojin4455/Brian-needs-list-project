@@ -507,6 +507,22 @@
 
     <script src="{% static 'documents/ghl_location.js' %}"></script>
     <script>
+        if (typeof withLocationQuery !== 'function') {
+            window.withLocationQuery = function(url) {
+                const id = new URLSearchParams(window.location.search).get('location_id');
+                if (!id) return url;
+                return url + (url.includes('?') ? '&' : '?') + 'location_id=' + encodeURIComponent(id);
+            };
+        }
+        if (typeof withLocationJsonBody !== 'function') {
+            window.withLocationJsonBody = function(obj) {
+                const id = new URLSearchParams(window.location.search).get('location_id');
+                if (!id || !obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+                return { ...obj, location_id: id };
+            };
+        }
+    </script>
+    <script>
         const requestId = '{{ request_id }}';
 
         function showAlert(message, type = 'success') {

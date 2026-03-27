@@ -207,6 +207,13 @@
         }
     </style>
     <script src="{% static 'documents/ghl_location.js' %}"></script>
+    <script>
+        if (typeof preserveQueryHref !== 'function') {
+            window.preserveQueryHref = function(path) {
+                return path + (window.location.search || '');
+            };
+        }
+    </script>
 </head>
 <body>
     <div class="container">
