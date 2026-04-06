@@ -20,13 +20,9 @@ def make_api_call():
                 location_id= credential.location_id,
                 defaults={
                     "access_token": response.json().get("access_token"),
-                    "refresh_token": credential.refresh_token,
+                    "refresh_token": response.json().get("refresh_token"),
                     "expires_in": response.json().get("expires_in"),
                     "scope": response.json().get("scope"),
-                    "user_type": response.json().get("userType"),
-                    "company_id": response.json().get("companyId"),
-                    "user_id":response.json().get("userId"),
-
                 }
             )
     
