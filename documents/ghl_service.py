@@ -177,11 +177,11 @@ def update_contact_note(contact_id, note_id, body, access_token=None):
 def update_contact_custom_field(contact_id, field_id, value, access_token=None):
     """
     Update a single custom field on a GHL contact.
-    PATCH /contacts/{contact_id}
+    PUT /contacts/{contact_id} with customFields [{id, field_value}, ...].
 
     :param contact_id: GHL contact ID
     :param field_id: GHL custom field ID (string)
-    :param value: string value to set
+    :param value: string value to set (sent as field_value)
     :param access_token: Bearer token; if omitted, uses settings.GHL_ACCESS_TOKEN.
     :return: dict from API (contact payload)
     """
@@ -192,7 +192,7 @@ def update_contact_custom_field(contact_id, field_id, value, access_token=None):
         "customFields": [
             {
                 "id": field_id,
-                "value": value,
+                "field_value": value,
             }
         ]
     }
