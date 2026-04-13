@@ -1258,9 +1258,11 @@ def save_admin_selections(request, request_id):
         # 2) the upload link URL we send to the user (based on request_id)
         # (individual + needs list). Failures here should not block the API.
         try:
+            from accounts.models import GHLCustomField
             from .ghl_service import (
-                get_opportunity,
                 create_contact_note,
+                get_opportunity,
+                update_contact_custom_field,
                 update_contact_note,
                 update_opportunity_custom_fields,
             )
@@ -1304,43 +1306,79 @@ def save_admin_selections(request, request_id):
                     }
                 )
 
-            if custom_fields:
-                # request_id here is the GHL opportunity ID in your URLs
-                update_opportunity_custom_fields(request_id, custom_fields, **ghl_kw)
-
-            # Create or update GHL contact note with the same needs list data
-            # (document list + upload link). Use saved note ID to update on subsequent changes.
+            # Same text for GHL contact note and optional contact custom field
             note_parts = []
             if names:
                 doc_list_value = "\n".join(
                     [f"{i}. {name}" for i, name in enumerate(names, start=1)]
                 )
-                # note_parts.append("Needs List\n\n" + doc_list_value)
                 note_parts.append(doc_list_value)
             note_parts.append("Upload link: " + upload_url)
-            note_body = "\n\n".join(note_parts)
+            needs_list_display_body = "\n\n".join(note_parts)
+
+            if custom_fields:
+                # request_id here is the GHL opportunity ID in your URLs
+                update_opportunity_custom_fields(request_id, custom_fields, **ghl_kw)
 
             try:
                 opp_data = get_opportunity(request_id, **ghl_kw)
                 opportunity = opp_data.get("opportunity") or {}
                 contact_id = opportunity.get("contactId")
                 if contact_id:
+                    creds = (ghl_ctx or {}).get("credentials")
+                    cf_name = (
+                        (getattr(creds, "contact_needs_list_field_name", None) or "").strip()
+                        if creds
+                        else ""
+                    )
+                    if cf_name:
+                        cf_row = GHLCustomField.objects.filter(
+                            account=creds,
+                            field_name=cf_name,
+                            is_active=True,
+                        ).first()
+                        if cf_row:
+                            try:
+                                update_contact_custom_field(
+                                    contact_id,
+                                    cf_row.ghl_field_id,
+                                    needs_list_display_body,
+                                    **ghl_kw,
+                                )
+                            except Exception as cf_err:
+                                logger.warning(
+                                    "Failed to update GHL contact custom field %r for request %s: %s",
+                                    cf_name,
+                                    request_id,
+                                    cf_err,
+                                    exc_info=True,
+                                )
+                        else:
+                            logger.warning(
+                                "contact_needs_list_field_name=%r has no GHLCustomField row for "
+                                "this account; run custom field sync or fix spelling for request %s",
+                                cf_name,
+                                request_id,
+                            )
+
                     if doc_request.ghl_needs_list_note_id:
                         update_contact_note(
                             contact_id,
                             doc_request.ghl_needs_list_note_id,
-                            note_body,
+                            needs_list_display_body,
                             **ghl_kw,
                         )
                     else:
-                        result = create_contact_note(contact_id, note_body, **ghl_kw)
+                        result = create_contact_note(
+                            contact_id, needs_list_display_body, **ghl_kw
+                        )
                         note_id = (result.get("note") or {}).get("id") or result.get("id")
                         if note_id:
                             doc_request.ghl_needs_list_note_id = note_id
                             doc_request.save(update_fields=["ghl_needs_list_note_id"])
             except Exception as note_err:
                 logger.warning(
-                    "Failed to create/update GHL needs list note for request %s: %s",
+                    "Failed to create/update GHL needs list note / contact field for request %s: %s",
                     request_id,
                     note_err,
                     exc_info=True,

@@ -30,6 +30,16 @@ class GHLAuthCredentials(models.Model):
         blank=True,
         help_text="For media update/delete API (e.g. location ID); leave blank to use location_id",
     )
+    contact_needs_list_field_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=(
+            "Optional. Exact name of a contact custom field in GHL (must exist in GHLCustomField "
+            "after sync), e.g. 'Send Needs List'. When set, admin needs-list saves also update "
+            "that contact field with the numbered list and upload link."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
