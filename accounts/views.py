@@ -93,6 +93,13 @@ def tokens(request):
                 "business_phone":location_data.get("phone")
             }
         )
+        from documents.account_library import (
+            seed_account_document_library,
+            seed_account_print_group_library,
+        )
+
+        seed_account_document_library(obj)
+        seed_account_print_group_library(obj)
         services.sync_custom_fields_to_db(location_id=response_data.get("locationId"), access_token=response_data.get("access_token"))
 
 

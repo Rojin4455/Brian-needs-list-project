@@ -18,6 +18,8 @@ urlpatterns = [
     # API endpoints
     path('api/categories/', views.get_categories, name='categories'),
     path('api/categories/create/', views.create_category, name='create-category'),
+    path('api/account/document-library/', views.account_document_library, name='account-document-library'),
+    path('api/account/print-group-library/', views.account_print_group_library, name='account-print-group-library'),
     path('api/documents/', views.get_documents, name='documents'),
     path('api/documents/create/', views.create_document, name='create-document'),
     path('api/documents/<int:document_id>/upload/', views.upload_document_file, name='upload-document'),

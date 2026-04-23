@@ -15,8 +15,32 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib import colors
-from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload, OpportunityCardSubmission
+from .models import (
+    AccountDocumentLibrary,
+    AccountPrintGroupLibrary,
+    Category,
+    Document,
+    PrintGroup,
+    DocumentRequest,
+    AdminDocumentSelection,
+    UserDocumentUpload,
+    OpportunityCardSubmission,
+)
+from .account_library import (
+    document_visible_to_account,
+    filter_documents_for_listing,
+    filter_print_groups_for_listing,
+    print_group_visible_to_account,
+    resolve_account_for_request,
+    sync_master_document_to_all_accounts,
+)
 from .ghl_credentials import extract_location_id, get_ghl_api_context
+
+
+def _document_request_by_url_id(request_id):
+    if not request_id:
+        return None
+    return DocumentRequest.objects.filter(request_id=request_id).first()
 
 
 @require_http_methods(["GET"])
@@ -26,13 +50,35 @@ def get_categories(request):
     GET /api/categories/
     Query parameters:
     - request_id: When provided, return only global categories + custom categories for this request (optional)
+    - location_id: When provided with global categories, limit to categories that have at least one
+      document enabled for that GHL subaccount.
     """
     categories = Category.objects.select_related('request')
     request_id = request.GET.get('request_id')
+    doc_request = _document_request_by_url_id(request_id) if request_id else None
+    account = resolve_account_for_request(request, doc_request=doc_request)
+
     if request_id:
-        categories = categories.filter(Q(request__isnull=True) | Q(request__request_id=request_id))
+        categories = categories.filter(
+            Q(request__isnull=True) | Q(request__request_id=request_id)
+        )
     else:
         categories = categories.all()
+
+    if account:
+        visible_docs = filter_documents_for_listing(
+            Document.objects.all(), account=account, doc_request=doc_request
+        )
+        visible_cat_ids = visible_docs.values_list("category_id", flat=True).distinct()
+        if doc_request:
+            categories = categories.filter(
+                Q(request=doc_request)
+                | (Q(request__isnull=True) & Q(id__in=visible_cat_ids))
+            )
+        else:
+            categories = categories.filter(
+                Q(request__isnull=True) & Q(id__in=visible_cat_ids)
+            )
     data = [
         {
             'id': category.id,
@@ -105,17 +151,19 @@ def get_documents(request):
     
     Query parameters:
     - request_id: When provided, return only global documents + custom documents for this request (optional)
+    - location_id: When provided, limit catalog documents to those enabled for that GHL subaccount
+      (and account-owned templates).
     - category_id: Filter by category ID (optional)
     - print_group_id: Filter by print group ID (optional)
     """
     documents = Document.objects.select_related('category', 'request').prefetch_related('print_groups')
     
-    # When request_id is provided, show only global docs (request is null) + custom docs for this request
     request_id = request.GET.get('request_id')
-    if request_id:
-        documents = documents.filter(Q(request__isnull=True) | Q(request__request_id=request_id))
-    else:
-        documents = documents.all()
+    doc_request = _document_request_by_url_id(request_id) if request_id else None
+    account = resolve_account_for_request(request, doc_request=doc_request)
+    documents = filter_documents_for_listing(
+        documents, account=account, doc_request=doc_request
+    )
     
     # Filter by category if provided
     category_id = request.GET.get('category_id')
@@ -161,17 +209,27 @@ def get_print_groups(request):
     
     Query parameters:
     - request_id: When provided, return only global print groups + custom print groups for this request (optional)
+    - location_id: When provided, catalog print groups are scoped to those enabled for that subaccount
+      (same pattern as documents). Account-owned print groups are always included for that location.
     - document_id: Filter by document ID to get print groups for a specific document (optional)
     """
-    print_groups = PrintGroup.objects.select_related('request')
-    
-    # When request_id is provided, show only global (request is null) + custom print groups for this request
-    request_id = request.GET.get('request_id')
+    print_groups = PrintGroup.objects.select_related("request", "owner_account")
+
+    request_id = request.GET.get("request_id")
+    doc_request = _document_request_by_url_id(request_id) if request_id else None
+    account = resolve_account_for_request(request, doc_request=doc_request)
+
     if request_id:
-        print_groups = print_groups.filter(Q(request__isnull=True) | Q(request__request_id=request_id))
+        print_groups = print_groups.filter(
+            Q(request__isnull=True) | Q(request__request_id=request_id)
+        )
     else:
         print_groups = print_groups.all()
-    
+
+    print_groups = filter_print_groups_for_listing(
+        print_groups, account=account, doc_request=doc_request
+    )
+
     # Filter by document if provided
     document_id = request.GET.get('document_id')
     if document_id:
@@ -657,6 +715,7 @@ def adhoc_page(request, request_id):
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
     _link_doc_request_to_location(request, doc_request)
+    account = resolve_account_for_request(request, doc_request=doc_request)
     
     # Load existing custom documents for adhoc section
     existing_selections = AdminDocumentSelection.objects.filter(
@@ -668,6 +727,15 @@ def adhoc_page(request, request_id):
     categories = Category.objects.filter(
         Q(request__isnull=True) | Q(request=doc_request)
     ).order_by('name')
+    if account:
+        visible_docs = filter_documents_for_listing(
+            Document.objects.all(), account=account, doc_request=doc_request
+        )
+        visible_cat_ids = visible_docs.values_list("category_id", flat=True).distinct()
+        categories = categories.filter(
+            Q(request=doc_request)
+            | (Q(request__isnull=True) & Q(id__in=visible_cat_ids))
+        )
     
     import json as json_module
     context = {
@@ -695,6 +763,7 @@ def individual_documents_page(request, request_id):
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
     _link_doc_request_to_location(request, doc_request)
+    account = resolve_account_for_request(request, doc_request=doc_request)
     
     # Load existing selections for individual section
     existing_selections = AdminDocumentSelection.objects.filter(
@@ -708,6 +777,15 @@ def individual_documents_page(request, request_id):
     categories = Category.objects.filter(
         Q(request__isnull=True) | Q(request=doc_request)
     ).order_by('name')
+    if account:
+        visible_docs = filter_documents_for_listing(
+            Document.objects.all(), account=account, doc_request=doc_request
+        )
+        visible_cat_ids = visible_docs.values_list("category_id", flat=True).distinct()
+        categories = categories.filter(
+            Q(request=doc_request)
+            | (Q(request__isnull=True) & Q(id__in=visible_cat_ids))
+        )
     
     import json as json_module
     context = {
@@ -736,6 +814,7 @@ def needs_list_page(request, request_id):
     # Get or create the document request
     doc_request, created = DocumentRequest.objects.get_or_create(request_id=request_id)
     _link_doc_request_to_location(request, doc_request)
+    account = resolve_account_for_request(request, doc_request=doc_request)
     
     # Load existing selections for needs_list section
     existing_selections = AdminDocumentSelection.objects.filter(
@@ -779,7 +858,21 @@ def needs_list_page(request, request_id):
     categories = Category.objects.filter(
         Q(request__isnull=True) | Q(request=doc_request)
     ).order_by('name')
-    all_print_groups = PrintGroup.objects.all()
+    visible_docs = None
+    if account:
+        visible_docs = filter_documents_for_listing(
+            Document.objects.all(), account=account, doc_request=doc_request
+        )
+        visible_cat_ids = visible_docs.values_list("category_id", flat=True).distinct()
+        categories = categories.filter(
+            Q(request=doc_request)
+            | (Q(request__isnull=True) & Q(id__in=visible_cat_ids))
+        )
+    all_print_groups = filter_print_groups_for_listing(
+        PrintGroup.objects.select_related("request", "owner_account"),
+        account=account,
+        doc_request=doc_request,
+    )
     
     import json as json_module
     context = {
@@ -809,6 +902,15 @@ def create_document(request):
         
         if not name or not description or not category_id:
             return JsonResponse({'error': 'Missing required fields: name, description, category_id'}, status=400)
+
+        from accounts.models import GHLAuthCredentials
+
+        location_id = data.get('location_id') or extract_location_id(request, data)
+        owner_account = None
+        if location_id:
+            owner_account = GHLAuthCredentials.objects.filter(
+                location_id=str(location_id).strip()
+            ).first()
         
         try:
             category = Category.objects.get(id=category_id)
@@ -818,12 +920,31 @@ def create_document(request):
         document = Document.objects.create(
             name=name,
             description=description,
-            category=category
+            category=category,
+            owner_account=owner_account,
         )
+        if owner_account is None:
+            sync_master_document_to_all_accounts(document)
+
+        acc_for_pg = owner_account or resolve_account_for_request(request, json_body=data)
         
         # Add print groups if provided
         if print_group_ids:
-            print_groups = PrintGroup.objects.filter(id__in=print_group_ids)
+            print_groups = list(PrintGroup.objects.filter(id__in=print_group_ids))
+            if len(print_groups) != len(print_group_ids):
+                return JsonResponse({'error': 'One or more print groups not found'}, status=404)
+            if acc_for_pg:
+                for pg in print_groups:
+                    if not print_group_visible_to_account(pg, acc_for_pg, None):
+                        return JsonResponse(
+                            {
+                                'error': (
+                                    f'Print group "{pg.name}" is not enabled for this subaccount '
+                                    '(adjust the account print group library).'
+                                )
+                            },
+                            status=403,
+                        )
             document.print_groups.set(print_groups)
         
         return JsonResponse({
@@ -1103,6 +1224,13 @@ def create_needs_list_document(request, request_id):
             print_group = PrintGroup.objects.get(id=print_group_id)
         except PrintGroup.DoesNotExist:
             return JsonResponse({'error': 'Print group not found'}, status=404)
+
+        account = resolve_account_for_request(request, json_body=data, doc_request=doc_request)
+        if account and not print_group_visible_to_account(print_group, account, doc_request):
+            return JsonResponse(
+                {'error': 'Print group is not enabled for this subaccount.'},
+                status=403,
+            )
         
         # Create the document (request-scoped so it appears only for this request)
         document = Document.objects.create(
@@ -1218,19 +1346,39 @@ def save_admin_selections(request, request_id):
         
         if section_type == 'needs_list' and not print_group_id:
             return JsonResponse({'error': 'print_group_id is required for needs_list section'}, status=400)
-        
-        # Validate documents exist
-        documents = Document.objects.filter(id__in=document_ids)
-        if documents.count() != len(document_ids):
-            return JsonResponse({'error': 'One or more documents not found'}, status=404)
-        
-        # Validate print group if provided
+
+        account = resolve_account_for_request(request, json_body=data, doc_request=doc_request)
+
         print_group = None
         if print_group_id:
             try:
                 print_group = PrintGroup.objects.get(id=print_group_id)
             except PrintGroup.DoesNotExist:
                 return JsonResponse({'error': 'Print group not found'}, status=404)
+            if section_type == 'needs_list' and account:
+                if not print_group_visible_to_account(print_group, account, doc_request):
+                    return JsonResponse(
+                        {'error': 'Print group is not enabled for this subaccount.'},
+                        status=403,
+                    )
+        
+        # Validate documents exist
+        documents = Document.objects.filter(id__in=document_ids)
+        if documents.count() != len(document_ids):
+            return JsonResponse({'error': 'One or more documents not found'}, status=404)
+
+        if account:
+            for doc in documents:
+                if not document_visible_to_account(doc, account, doc_request):
+                    return JsonResponse(
+                        {
+                            'error': (
+                                f'Document "{doc.name}" is not enabled for this '
+                                'subaccount (add it in the account document library).'
+                            )
+                        },
+                        status=403,
+                    )
         
         # Preserve existing selection rows when possible so previously uploaded files
         # stay linked. Only delete rows that are no longer selected.
@@ -1568,6 +1716,219 @@ def accept_user_upload(request, request_id, upload_id):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def account_document_library(request):
+    """
+    Per-subaccount document library (catalog masters + account-owned templates).
+
+    GET /api/account/document-library/?location_id=
+        Returns { document_ids: [...] } for documents available when picking lists
+        (same rule as GET /api/documents/ with location_id and no request_id).
+
+    POST /api/account/document-library/
+        JSON: location_id, action, document_id
+        - action "add": enable a shared catalog document for this subaccount.
+        - action "remove": disable a shared catalog document (does not delete the master row).
+        - action "delete_owned": permanently delete an account-only template
+          (Document.owner_account must match location_id).
+    """
+    from accounts.models import GHLAuthCredentials
+
+    if request.method == "GET":
+        location_id = extract_location_id(request, None)
+        if not location_id:
+            return JsonResponse({"error": "location_id is required"}, status=400)
+        account = GHLAuthCredentials.objects.filter(
+            location_id=str(location_id).strip()
+        ).first()
+        if not account:
+            return JsonResponse({"error": "Unknown location_id"}, status=404)
+        ids = list(
+            filter_documents_for_listing(
+                Document.objects.all(), account=account, doc_request=None
+            ).values_list("id", flat=True)
+        )
+        return JsonResponse({"document_ids": ids})
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    location_id = data.get("location_id") or extract_location_id(request, data)
+    if not location_id:
+        return JsonResponse({"error": "location_id is required"}, status=400)
+    account = GHLAuthCredentials.objects.filter(
+        location_id=str(location_id).strip()
+    ).first()
+    if not account:
+        return JsonResponse({"error": "Unknown location_id"}, status=404)
+
+    action = data.get("action")
+    document_id = data.get("document_id")
+    if not document_id or action not in ("add", "remove", "delete_owned"):
+        return JsonResponse(
+            {
+                "error": (
+                    "document_id and action are required; "
+                    "action must be 'add', 'remove', or 'delete_owned'"
+                )
+            },
+            status=400,
+        )
+
+    try:
+        doc = Document.objects.get(id=int(document_id))
+    except (Document.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"error": "Document not found"}, status=404)
+
+    if action == "add":
+        if doc.request_id or doc.owner_account_id:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Only shared catalog documents can be added via the library "
+                        "(request and owner_account must be empty)"
+                    )
+                },
+                status=400,
+            )
+        AccountDocumentLibrary.objects.get_or_create(account=account, document=doc)
+        return JsonResponse({"success": True, "document_id": doc.id})
+
+    if action == "remove":
+        if doc.request_id or doc.owner_account_id:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Only shared catalog documents can be removed from the library this way"
+                    )
+                },
+                status=400,
+            )
+        AccountDocumentLibrary.objects.filter(account=account, document=doc).delete()
+        return JsonResponse({"success": True, "document_id": doc.id})
+
+    if doc.owner_account_id != account.id:
+        return JsonResponse(
+            {"error": "Not an account-owned template for this location"},
+            status=403,
+        )
+    if doc.request_id:
+        return JsonResponse(
+            {"error": "Request-scoped documents cannot be deleted here"},
+            status=400,
+        )
+    doc.delete()
+    return JsonResponse({"success": True, "document_id": int(document_id)})
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def account_print_group_library(request):
+    """
+    Per-subaccount print group library (catalog masters + account-owned groups).
+
+    GET /api/account/print-group-library/?location_id=
+        Returns { print_group_ids: [...] }.
+
+    POST JSON: location_id, action, print_group_id
+        - action "add": enable a shared catalog print group for this subaccount.
+        - action "remove": disable it (does not delete the master row).
+        - action "delete_owned": delete a PrintGroup with owner_account matching location_id.
+    """
+    from accounts.models import GHLAuthCredentials
+
+    if request.method == "GET":
+        location_id = extract_location_id(request, None)
+        if not location_id:
+            return JsonResponse({"error": "location_id is required"}, status=400)
+        account = GHLAuthCredentials.objects.filter(
+            location_id=str(location_id).strip()
+        ).first()
+        if not account:
+            return JsonResponse({"error": "Unknown location_id"}, status=404)
+        ids = list(
+            filter_print_groups_for_listing(
+                PrintGroup.objects.all(), account=account, doc_request=None
+            ).values_list("id", flat=True)
+        )
+        return JsonResponse({"print_group_ids": ids})
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    location_id = data.get("location_id") or extract_location_id(request, data)
+    if not location_id:
+        return JsonResponse({"error": "location_id is required"}, status=400)
+    account = GHLAuthCredentials.objects.filter(
+        location_id=str(location_id).strip()
+    ).first()
+    if not account:
+        return JsonResponse({"error": "Unknown location_id"}, status=404)
+
+    action = data.get("action")
+    print_group_id = data.get("print_group_id")
+    if not print_group_id or action not in ("add", "remove", "delete_owned"):
+        return JsonResponse(
+            {
+                "error": (
+                    "print_group_id and action are required; "
+                    "action must be 'add', 'remove', or 'delete_owned'"
+                )
+            },
+            status=400,
+        )
+
+    try:
+        pg = PrintGroup.objects.get(id=int(print_group_id))
+    except (PrintGroup.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"error": "Print group not found"}, status=404)
+
+    if action == "add":
+        if pg.request_id or pg.owner_account_id:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Only shared catalog print groups can be added "
+                        "(request and owner_account must be empty)"
+                    )
+                },
+                status=400,
+            )
+        AccountPrintGroupLibrary.objects.get_or_create(account=account, print_group=pg)
+        return JsonResponse({"success": True, "print_group_id": pg.id})
+
+    if action == "remove":
+        if pg.request_id or pg.owner_account_id:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Only shared catalog print groups can be removed from the library this way"
+                    )
+                },
+                status=400,
+            )
+        AccountPrintGroupLibrary.objects.filter(account=account, print_group=pg).delete()
+        return JsonResponse({"success": True, "print_group_id": pg.id})
+
+    if pg.owner_account_id != account.id:
+        return JsonResponse(
+            {"error": "Not an account-owned print group for this location"},
+            status=403,
+        )
+    if pg.request_id:
+        return JsonResponse(
+            {"error": "Request-scoped print groups cannot be deleted here"},
+            status=400,
+        )
+    pg.delete()
+    return JsonResponse({"success": True, "print_group_id": int(print_group_id)})
 
 
 def user_documents_view(request, request_id):

@@ -256,6 +256,19 @@ class Command(BaseCommand):
                             error_msg = f'Row {row_num}: Error processing - {str(e)}'
                             errors.append(error_msg)
                             self.stdout.write(self.style.ERROR(error_msg))
+
+                from documents.account_library import (
+                    sync_all_master_documents_to_all_libraries,
+                    sync_all_master_print_groups_to_all_libraries,
+                )
+
+                sync_all_master_documents_to_all_libraries()
+                sync_all_master_print_groups_to_all_libraries()
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        "Synced catalog documents and print groups to all subaccount libraries (idempotent)."
+                    )
+                )
                 
                 # Summary
                 self.stdout.write(self.style.SUCCESS('\n' + '='*50))

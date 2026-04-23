@@ -43,6 +43,14 @@ class PrintGroup(models.Model):
         related_name='custom_print_groups',
         help_text="If set, this print group is visible only for this request (custom needs list group)"
     )
+    owner_account = models.ForeignKey(
+        "accounts.GHLAuthCredentials",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="owned_print_groups",
+        help_text="If set, this print group is only available for this GHL subaccount (master catalog otherwise).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -80,6 +88,14 @@ class Document(models.Model):
         related_name='custom_documents',
         help_text="If set, this document is visible only for this request (custom ad hoc/individual/needs list doc)"
     )
+    owner_account = models.ForeignKey(
+        "accounts.GHLAuthCredentials",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="owned_catalog_documents",
+        help_text="If set, this catalog-style document belongs only to this subaccount (not in shared master list).",
+    )
     print_groups = models.ManyToManyField(
         PrintGroup,
         related_name='documents',
@@ -104,6 +120,58 @@ class Document(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class AccountDocumentLibrary(models.Model):
+    """
+    Which master catalog documents (request=NULL, owner_account=NULL) are enabled
+    for a given GHL subaccount. Admins add/remove rows to customize the library per account.
+    """
+
+    account = models.ForeignKey(
+        "accounts.GHLAuthCredentials",
+        on_delete=models.CASCADE,
+        related_name="document_library_entries",
+    )
+    document = models.ForeignKey(
+        "Document",
+        on_delete=models.CASCADE,
+        related_name="account_library_entries",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [["account", "document"]]
+        verbose_name_plural = "Account document library entries"
+
+    def __str__(self):
+        return f"{self.account_id} → {self.document_id}"
+
+
+class AccountPrintGroupLibrary(models.Model):
+    """
+    Which master catalog print groups (request=NULL, owner_account=NULL) are enabled
+    per GHL subaccount—mirrors AccountDocumentLibrary for needs-list groupings.
+    """
+
+    account = models.ForeignKey(
+        "accounts.GHLAuthCredentials",
+        on_delete=models.CASCADE,
+        related_name="print_group_library_entries",
+    )
+    print_group = models.ForeignKey(
+        "PrintGroup",
+        on_delete=models.CASCADE,
+        related_name="account_library_entries",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [["account", "print_group"]]
+        verbose_name_plural = "Account print group library entries"
+
+    def __str__(self):
+        return f"{self.account_id} → {self.print_group_id}"
 
 
 class DocumentRequest(models.Model):

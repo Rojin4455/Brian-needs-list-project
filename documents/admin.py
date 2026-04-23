@@ -1,5 +1,15 @@
 from django.contrib import admin
-from .models import Category, Document, PrintGroup, DocumentRequest, AdminDocumentSelection, UserDocumentUpload, OpportunityCardSubmission
+from .models import (
+    AccountDocumentLibrary,
+    AccountPrintGroupLibrary,
+    Category,
+    Document,
+    PrintGroup,
+    DocumentRequest,
+    AdminDocumentSelection,
+    UserDocumentUpload,
+    OpportunityCardSubmission,
+)
 
 
 @admin.register(Category)
@@ -11,14 +21,33 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(PrintGroup)
 class PrintGroupAdmin(admin.ModelAdmin):
-    list_display = ['name', 'description', 'created_at']
+    list_display = ['name', 'request', 'owner_account', 'created_at']
     search_fields = ['name', 'description']
     list_filter = ['created_at']
+    readonly_fields = ['created_at', 'updated_at']
+    fieldsets = (
+        (None, {'fields': ('name', 'description', 'request', 'owner_account')}),
+        ('Timestamps', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+    )
+
+
+@admin.register(AccountPrintGroupLibrary)
+class AccountPrintGroupLibraryAdmin(admin.ModelAdmin):
+    list_display = ['account', 'print_group', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['account__location_id', 'account__location_name', 'print_group__name']
+
+
+@admin.register(AccountDocumentLibrary)
+class AccountDocumentLibraryAdmin(admin.ModelAdmin):
+    list_display = ['account', 'document', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['account__location_id', 'account__location_name', 'document__name']
 
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'get_print_groups', 'created_at']
+    list_display = ['name', 'category', 'request', 'owner_account', 'get_print_groups', 'created_at']
     list_filter = ['category', 'print_groups', 'created_at']
     search_fields = ['name', 'description', 'category__name']
     filter_horizontal = ['print_groups']
@@ -26,7 +55,7 @@ class DocumentAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'description', 'category')
+            'fields': ('name', 'description', 'category', 'request', 'owner_account')
         }),
         ('Print Groups', {
             'fields': ('print_groups',)

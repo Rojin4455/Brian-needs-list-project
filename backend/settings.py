@@ -54,7 +54,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_celery_beat',
-    'documents',
+    'documents.apps.DocumentsConfig',
     'csp',
     'accounts',
 ]
