@@ -408,6 +408,123 @@ def _resolve_contact_custom_field_id(ctx, field_name):
     return cf.ghl_field_id if cf else None
 
 
+def _resolve_opportunity_custom_field_id(ctx, field_name):
+    """
+    Resolve an opportunity custom field GHL id from GHLCustomField for this account (by field_name).
+    """
+    if not ctx or not ctx.get("credentials") or not field_name:
+        return None
+    from accounts.models import GHLCustomField
+
+    creds = ctx["credentials"]
+    cf = GHLCustomField.objects.filter(
+        account=creds,
+        field_name=field_name,
+        is_active=True,
+    ).first()
+    return cf.ghl_field_id if cf else None
+
+
+def _numbered_document_list(names):
+    """Format document names as a numbered multiline list for GHL text fields."""
+    return "\n".join(f"{i}. {name}" for i, name in enumerate(names, start=1))
+
+
+def _build_uploaded_pending_document_names(doc_request):
+    """
+    Split admin-requested documents into uploaded vs still-pending for a request.
+    A document name is uploaded if any selection with that name has at least one upload.
+    """
+    selections = AdminDocumentSelection.objects.filter(
+        request=doc_request,
+    ).select_related("document").prefetch_related("user_uploads")
+
+    names_with_upload = set()
+    for sel in selections:
+        name = (sel.document.name or "").strip()
+        if name and sel.user_uploads.exists():
+            names_with_upload.add(name)
+
+    uploaded_names = []
+    pending_names = []
+    uploaded_seen = set()
+    pending_seen = set()
+
+    for sel in selections:
+        name = (sel.document.name or "").strip()
+        if not name:
+            continue
+        if name in names_with_upload:
+            if name not in uploaded_seen:
+                uploaded_seen.add(name)
+                uploaded_names.append(name)
+        elif name not in pending_seen:
+            pending_seen.add(name)
+            pending_names.append(name)
+
+    return uploaded_names, pending_names
+
+
+def _sync_needs_list_upload_status_to_ghl(request, doc_request, json_body=None):
+    """
+    Update GHL opportunity fields "Needs List - Uploaded" and "Needs List - Pending"
+    from current admin selections and user uploads. Failures are logged only.
+    """
+    try:
+        from .ghl_service import update_opportunity_custom_fields
+
+        ghl_ctx = _resolve_ghl_context(request, json_body=json_body, doc_request=doc_request)
+        if not ghl_ctx:
+            return
+
+        uploaded_field_id = _resolve_opportunity_custom_field_id(
+            ghl_ctx, "Needs List - Uploaded"
+        )
+        pending_field_id = _resolve_opportunity_custom_field_id(
+            ghl_ctx, "Needs List - Pending"
+        )
+        if not uploaded_field_id and not pending_field_id:
+            logger.warning(
+                "Needs List Uploaded/Pending field IDs not configured for request %s",
+                doc_request.request_id,
+            )
+            return
+
+        uploaded_names, pending_names = _build_uploaded_pending_document_names(doc_request)
+
+        custom_fields = []
+        if uploaded_field_id:
+            custom_fields.append(
+                {
+                    "id": uploaded_field_id,
+                    "field_value": _numbered_document_list(uploaded_names)
+                    if uploaded_names
+                    else "",
+                }
+            )
+        if pending_field_id:
+            custom_fields.append(
+                {
+                    "id": pending_field_id,
+                    "field_value": _numbered_document_list(pending_names)
+                    if pending_names
+                    else "",
+                }
+            )
+
+        ghl_kw = {}
+        if ghl_ctx.get("access_token"):
+            ghl_kw["access_token"] = ghl_ctx["access_token"]
+        update_opportunity_custom_fields(doc_request.request_id, custom_fields, **ghl_kw)
+    except Exception as e:
+        logger.warning(
+            "Failed to sync Needs List Uploaded/Pending for request %s: %s",
+            doc_request.request_id,
+            e,
+            exc_info=True,
+        )
+
+
 @csrf_exempt
 def opportunity_card_form(request, request_id):
     """
@@ -1548,6 +1665,8 @@ def save_admin_selections(request, request_id):
                 exc_info=True,
             )
 
+        _sync_needs_list_upload_status_to_ghl(request, doc_request, json_body=data)
+
         return JsonResponse({
             'success': True,
             'selections': selections,
@@ -1592,6 +1711,8 @@ def upload_user_file(request, request_id, selection_id):
             ghl_file_url=result.get('url'),
             file_name=file.name,
         )
+
+        _sync_needs_list_upload_status_to_ghl(request, doc_request)
 
         return JsonResponse({
             'success': True,
@@ -1658,6 +1779,8 @@ def delete_user_upload(request, request_id, upload_id):
 
         deleted_id = upload.id
         upload.delete()
+
+        _sync_needs_list_upload_status_to_ghl(request, doc_request)
 
         return JsonResponse({
             'success': True,
