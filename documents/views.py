@@ -3,7 +3,7 @@ from django.views.decorators.http import require_http_methods
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils import timezone
 import json
@@ -1498,7 +1498,7 @@ def save_admin_selections(request, request_id):
                     )
         
         # Preserve existing selection rows when possible so previously uploaded files
-        # stay linked. Only delete rows that are no longer selected.
+        # stay linked. Never delete a deselected row that already has uploads.
         selections = []
         document_by_id = {doc.id: doc for doc in documents}
         target_ids = set(document_ids)
@@ -1513,8 +1513,16 @@ def save_admin_selections(request, request_id):
 
             existing_by_doc_id = {sel.document_id: sel for sel in existing_qs}
 
-            # Remove deselected documents for this scope.
-            existing_qs.exclude(document_id__in=target_ids).delete()
+            # Drop empty deselected rows only. Rows with uploads stay so Approve
+            # Needs List still shows every file the contact already sent.
+            stale_empty_ids = list(
+                existing_qs.exclude(document_id__in=target_ids)
+                .annotate(upload_count=Count("user_uploads"))
+                .filter(upload_count=0)
+                .values_list("id", flat=True)
+            )
+            if stale_empty_ids:
+                AdminDocumentSelection.objects.filter(id__in=stale_empty_ids).delete()
 
             # Reuse existing row if present; otherwise create.
             for doc_id in document_ids:
